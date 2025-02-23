@@ -96,7 +96,7 @@
             <tr>
               <th></th>
               <th>市场</th>
-              <th class="text-end">数量</th>
+              <th class="text-end">股票数量</th>
               <th class="text-end">笔数</th>
               <th class="text-end">买入总额</th>
               <th class="text-end">平均价格</th>
@@ -119,7 +119,7 @@
                   </button>
                 </td>
                 <td>{{ market }}</td>
-                <td class="text-end">-</td>
+                <td class="text-end">{{ formatNumber(marketStats[market].total_stocks, 0) }}</td>
                 <td class="text-end">{{ marketStats[market].transaction_count }}</td>
                 <td class="text-end text-danger">{{ formatNumber(marketStats[market].total_buy) }}</td>
                 <td class="text-end">-</td>
@@ -495,6 +495,7 @@ const useStatsCalculator = () => {
       // 初始化市场统计
       if (!stats[market]) {
         stats[market] = {
+          total_stocks: 0,
           transaction_count: 0,
           total_buy: 0,
           total_sell: 0,
@@ -537,6 +538,7 @@ const useStatsCalculator = () => {
       
       if (stock.current_quantity > 0) {
         // 持仓股票统计
+        stats[market].total_stocks += 1
         stats[market].holding_stats.count++
         stats[market].holding_stats.total_buy += stock.total_buy || 0
         stats[market].holding_stats.total_sell += stock.total_sell || 0
@@ -546,6 +548,7 @@ const useStatsCalculator = () => {
         stats[market].holding_stats.holding_profit += stock.holding_profit || 0
       } else {
         // 已清仓股票统计
+        stats[market].total_stocks += 1
         stats[market].closed_stats.count++
         stats[market].closed_stats.total_buy += stock.total_buy || 0
         stats[market].closed_stats.total_sell += stock.total_sell || 0
