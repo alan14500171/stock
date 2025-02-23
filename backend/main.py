@@ -4,11 +4,16 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from config.database import db
+from flask_cors import CORS
+from config.logging import setup_logging
 
 # 导入路由
 from routes.auth import auth_bp
 from routes.stock import stock_bp
 from routes.profit import profit_bp
+
+# 设置日志
+setup_logging()
 
 def create_app():
     # 创建应用实例
@@ -24,6 +29,8 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 最大请求大小16MB
 
     # 添加CORS支持
+    CORS(app)
+
     @app.after_request
     def after_request(response):
         allowed_origins = [
