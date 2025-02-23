@@ -110,7 +110,7 @@
             </tr>
           </thead>
           <tbody>
-            <template v-for="(market, index) in getMarkets" :key="market">
+            <template v-for="market in getMarkets" :key="market">
               <!-- 市场汇总 -->
               <tr class="market-row">
                 <td>
@@ -120,23 +120,23 @@
                 </td>
                 <td>{{ market }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end">{{ computedMarketStats[market].transaction_count }}</td>
-                <td class="text-end text-danger">{{ formatNumber(computedMarketStats[market].total_buy) }}</td>
+                <td class="text-end">{{ marketStats[market].transaction_count }}</td>
+                <td class="text-end text-danger">{{ formatNumber(marketStats[market].total_buy) }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(computedMarketStats[market].total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(computedMarketStats[market].total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].realized_profit)">
-                  {{ formatNumber(computedMarketStats[market].realized_profit) }}
+                <td class="text-end text-success">{{ formatNumber(marketStats[market].total_sell) }}</td>
+                <td class="text-end">{{ formatNumber(marketStats[market].total_fees) }}</td>
+                <td class="text-end" :class="getProfitClass(marketStats[market].realized_profit)">
+                  {{ formatNumber(marketStats[market].realized_profit) }}
                 </td>
                 <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].holding_profit)">
-                  {{ formatNumber(computedMarketStats[market].holding_profit) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].holding_profit)">
+                  {{ formatNumber(marketStats[market].holding_profit) }}
                 </td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].total_profit)">
-                  {{ formatNumber(computedMarketStats[market].total_profit) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].total_profit)">
+                  {{ formatNumber(marketStats[market].total_profit) }}
                 </td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].profit_rate)">
-                  {{ formatRate(computedMarketStats[market].profit_rate) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].profit_rate)">
+                  {{ formatRate(marketStats[market].profit_rate) }}
                 </td>
               </tr>
 
@@ -144,24 +144,24 @@
               <tr v-if="isMarketExpanded(market)" class="holding-stats-row">
                 <td></td>
                 <td><strong>持仓统计</strong></td>
-                <td class="text-end">{{ computedMarketStats[market].holding_stats.count }}</td>
+                <td class="text-end">{{ marketStats[market].holding_stats.count }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end text-danger">{{ formatNumber(computedMarketStats[market].holding_stats.total_buy) }}</td>
+                <td class="text-end text-danger">{{ formatNumber(marketStats[market].holding_stats.total_buy) }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(computedMarketStats[market].holding_stats.total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(computedMarketStats[market].holding_stats.total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].holding_stats.realized_profit)">
-                  {{ formatNumber(computedMarketStats[market].holding_stats.realized_profit) }}
+                <td class="text-end text-success">{{ formatNumber(marketStats[market].holding_stats.total_sell) }}</td>
+                <td class="text-end">{{ formatNumber(marketStats[market].holding_stats.total_fees) }}</td>
+                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.realized_profit)">
+                  {{ formatNumber(marketStats[market].holding_stats.realized_profit) }}
                 </td>
                 <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].holding_stats.holding_profit)">
-                  {{ formatNumber(computedMarketStats[market].holding_stats.holding_profit) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.holding_profit)">
+                  {{ formatNumber(marketStats[market].holding_stats.holding_profit) }}
                 </td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].holding_stats.total_profit)">
-                  {{ formatNumber(computedMarketStats[market].holding_stats.total_profit) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.total_profit)">
+                  {{ formatNumber(marketStats[market].holding_stats.total_profit) }}
                 </td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].holding_stats.profit_rate)">
-                  {{ formatRate(computedMarketStats[market].holding_stats.profit_rate) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.profit_rate)">
+                  {{ formatRate(marketStats[market].holding_stats.profit_rate) }}
                 </td>
               </tr>
 
@@ -169,20 +169,20 @@
               <tr v-if="isMarketExpanded(market)" class="closed-stats-row">
                 <td></td>
                 <td><strong>已清仓统计</strong></td>
-                <td class="text-end">{{ computedMarketStats[market].closed_stats.count }}</td>
+                <td class="text-end">{{ marketStats[market].closed_stats.count }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end text-danger">{{ formatNumber(computedMarketStats[market].closed_stats.total_buy) }}</td>
+                <td class="text-end text-danger">{{ formatNumber(marketStats[market].closed_stats.total_buy) }}</td>
                 <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(computedMarketStats[market].closed_stats.total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(computedMarketStats[market].closed_stats.total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].closed_stats.realized_profit)">
-                  {{ formatNumber(computedMarketStats[market].closed_stats.realized_profit) }}
+                <td class="text-end text-success">{{ formatNumber(marketStats[market].closed_stats.total_sell) }}</td>
+                <td class="text-end">{{ formatNumber(marketStats[market].closed_stats.total_fees) }}</td>
+                <td class="text-end" :class="getProfitClass(marketStats[market].closed_stats.realized_profit)">
+                  {{ formatNumber(marketStats[market].closed_stats.realized_profit) }}
                 </td>
                 <td class="text-end">-</td>
                 <td class="text-end">-</td>
                 <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(computedMarketStats[market].closed_stats.profit_rate)">
-                  {{ formatRate(computedMarketStats[market].closed_stats.profit_rate) }}
+                <td class="text-end" :class="getProfitClass(marketStats[market].closed_stats.profit_rate)">
+                  {{ formatRate(marketStats[market].closed_stats.profit_rate) }}
                 </td>
               </tr>
 
@@ -444,6 +444,7 @@ const expandedMarkets = ref(new Set())
 const expandedHoldingGroups = ref(new Set())
 const expandedClosedGroups = ref(new Set())
 const expandedStocks = ref(new Set())
+const marketStats = ref({})
 const stockStats = ref({})
 const transactionDetails = ref({})
 const allStocks = ref([])
@@ -535,7 +536,7 @@ const getClosedStocks = (market) => {
 
 // 获取市场列表（按名称排序）
 const getMarkets = computed(() => {
-  return Object.keys(computedMarketStats.value).sort();
+  return Object.keys(marketStats.value).sort();
 });
 
 // 格式化函数
@@ -621,7 +622,7 @@ const toggleStock = (market, code) => {
 }
 
 const expandAll = () => {
-  Object.keys(stockStats.value).forEach(market => {
+  Object.keys(marketStats.value).forEach(market => {
     expandedMarkets.value.add(market)
     expandedHoldingGroups.value.add(market)
   })
@@ -673,6 +674,7 @@ const search = async () => {
     
     const response = await axios.get('/api/profit/', { params })
     if (response.data.success) {
+      marketStats.value = response.data.data.market_stats || {}
       stockStats.value = response.data.data.stock_stats || {}
       transactionDetails.value = response.data.data.transaction_details || {}
       
@@ -696,7 +698,7 @@ const search = async () => {
         })
       } else {
         // 如果没有选择股票，则展开所有市场
-        Object.keys(computedMarketStats.value).forEach(market => {
+        Object.keys(marketStats.value).forEach(market => {
           expandedMarkets.value.add(market)
           expandedHoldingGroups.value.add(market)
         })
@@ -1012,157 +1014,6 @@ const fetchStocks = async () => {
     console.error('获取股票列表失败:', error)
   }
 }
-
-// 过滤后的股票统计数据
-const filteredStockStats = computed(() => {
-  const result = {};
-  
-  // 遍历所有交易记录
-  Object.entries(transactionDetails.value).forEach(([key, transactions]) => {
-    // 如果有日期范围筛选
-    if (searchForm.startDate && searchForm.endDate) {
-      transactions = transactions.filter(t => 
-        t.transaction_date >= searchForm.startDate && 
-        t.transaction_date <= searchForm.endDate
-      );
-    }
-    
-    // 如果有市场筛选
-    if (searchForm.market && transactions[0]?.market !== searchForm.market) {
-      return;
-    }
-    
-    // 如果有股票代码筛选
-    if (searchForm.stockCodes?.length > 0 && !searchForm.stockCodes.includes(transactions[0]?.stock_code)) {
-      return;
-    }
-    
-    // 只有在有交易记录时才添加到结果中
-    if (transactions.length > 0) {
-      result[key] = transactions;
-    }
-  });
-  
-  return result;
-});
-
-// 市场统计数据
-const computedMarketStats = computed(() => {
-  const stats = {};
-  
-  // 遍历过滤后的交易记录
-  Object.values(filteredStockStats.value).forEach(transactions => {
-    if (!transactions || transactions.length === 0) return;
-    
-    const market = transactions[0].market;
-    if (!stats[market]) {
-      stats[market] = {
-        transaction_count: 0,
-        total_buy: 0,
-        total_sell: 0,
-        total_fees: 0,
-        realized_profit: 0,
-        market_value: 0,
-        holding_profit: 0,
-        total_profit: 0,
-        profit_rate: 0,
-        holding_stats: {
-          count: 0,
-          total_buy: 0,
-          total_sell: 0,
-          total_fees: 0,
-          realized_profit: 0,
-          market_value: 0,
-          holding_profit: 0,
-          total_profit: 0,
-          profit_rate: 0
-        },
-        closed_stats: {
-          count: 0,
-          total_buy: 0,
-          total_sell: 0,
-          total_fees: 0,
-          realized_profit: 0,
-          profit_rate: 0
-        }
-      };
-    }
-    
-    // 获取最新一条记录的持仓信息
-    const latestRecord = transactions[0];
-    const quantity = Number(latestRecord.current_quantity || 0);
-    
-    // 计算交易统计
-    let totalBuy = 0;
-    let totalSell = 0;
-    let totalFees = 0;
-    let realizedProfit = 0;
-    
-    // 遍历每笔交易计算统计数据
-    transactions.forEach(t => {
-      if (t.transaction_type === 'BUY') {
-        totalBuy += Number(t.total_amount || 0);
-      } else if (t.transaction_type === 'SELL') {
-        totalSell += Number(t.total_amount || 0);
-        // 计算单笔交易的已实现盈亏
-        const sellAmount = Number(t.total_amount || 0);
-        const costAmount = Number(t.total_quantity || 0) * Number(t.sold_average_cost || 0);
-        const fees = Number(t.total_fees_hkd || 0);
-        const sellProfit = sellAmount - costAmount - fees;
-        realizedProfit += sellProfit;
-      }
-      totalFees += Number(t.total_fees_hkd || 0);
-    });
-    
-    // 更新市场统计
-    stats[market].transaction_count += transactions.length;
-    stats[market].total_buy += totalBuy;
-    stats[market].total_sell += totalSell;
-    stats[market].total_fees += totalFees;
-    stats[market].realized_profit += realizedProfit;
-    
-    if (quantity > 0) {
-      // 持仓统计
-      stats[market].holding_stats.count++;
-      stats[market].holding_stats.total_buy += totalBuy;
-      stats[market].holding_stats.total_sell += totalSell;
-      stats[market].holding_stats.total_fees += totalFees;
-      stats[market].holding_stats.realized_profit += realizedProfit;
-      stats[market].holding_stats.market_value += quantity * Number(latestRecord.current_price || 0);
-      stats[market].holding_stats.holding_profit = Number(latestRecord.holding_profit || 0);
-      stats[market].holding_stats.total_profit = stats[market].holding_stats.holding_profit + stats[market].holding_stats.realized_profit;
-      
-      if (stats[market].holding_stats.total_buy > 0) {
-        stats[market].holding_stats.profit_rate = stats[market].holding_stats.total_profit / stats[market].holding_stats.total_buy * 100;
-      }
-    } else {
-      // 已清仓统计
-      stats[market].closed_stats.count++;
-      stats[market].closed_stats.total_buy += totalBuy;
-      stats[market].closed_stats.total_sell += totalSell;
-      stats[market].closed_stats.total_fees += totalFees;
-      stats[market].closed_stats.realized_profit += realizedProfit;
-      
-      if (stats[market].closed_stats.total_buy > 0) {
-        stats[market].closed_stats.profit_rate = stats[market].closed_stats.realized_profit / stats[market].closed_stats.total_buy * 100;
-      }
-    }
-    
-    // 更新市场总计
-    stats[market].market_value = stats[market].holding_stats.market_value;
-    stats[market].holding_profit = stats[market].holding_stats.holding_profit;
-    stats[market].total_profit = stats[market].holding_stats.holding_profit + 
-                                stats[market].holding_stats.realized_profit +
-                                stats[market].closed_stats.realized_profit;
-    
-    const totalBuyAll = stats[market].holding_stats.total_buy + stats[market].closed_stats.total_buy;
-    if (totalBuyAll > 0) {
-      stats[market].profit_rate = stats[market].total_profit / totalBuyAll * 100;
-    }
-  });
-  
-  return stats;
-});
 
 // 初始化
 onMounted(() => {
@@ -1672,4 +1523,3 @@ onMounted(() => {
   min-width: 200px;
 }
 </style> 
-
