@@ -519,32 +519,30 @@ const marketStats = computed(() => {
     }
 
     // 更新市场统计
-    stats[market].transaction_count += stock.transaction_count
-    stats[market].total_buy += stock.total_buy
-    stats[market].total_sell += stock.total_sell
-    stats[market].total_fees += stock.total_fees
-    stats[market].realized_profit += stock.realized_profit
+    stats[market].transaction_count += stock.transaction_count || 0
+    stats[market].total_buy += stock.total_buy || 0
+    stats[market].total_sell += stock.total_sell || 0
+    stats[market].total_fees += stock.total_fees || 0
+    stats[market].realized_profit += stock.realized_profit || 0
+    stats[market].market_value += stock.market_value || 0
+    stats[market].holding_profit += stock.holding_profit || 0
     
-    if (stock.quantity > 0) {
+    if (stock.current_quantity > 0) {
       // 持仓股票统计
       stats[market].holding_stats.count++
-      stats[market].holding_stats.total_buy += stock.total_buy
-      stats[market].holding_stats.total_sell += stock.total_sell
-      stats[market].holding_stats.total_fees += stock.total_fees
-      stats[market].holding_stats.realized_profit += stock.realized_profit
-      stats[market].holding_stats.market_value += stock.market_value
-      stats[market].holding_stats.holding_profit += stock.holding_profit
-      
-      // 更新市场总计
-      stats[market].market_value += stock.market_value
-      stats[market].holding_profit += stock.holding_profit
+      stats[market].holding_stats.total_buy += stock.total_buy || 0
+      stats[market].holding_stats.total_sell += stock.total_sell || 0
+      stats[market].holding_stats.total_fees += stock.total_fees || 0
+      stats[market].holding_stats.realized_profit += stock.realized_profit || 0
+      stats[market].holding_stats.market_value += stock.market_value || 0
+      stats[market].holding_stats.holding_profit += stock.holding_profit || 0
     } else {
       // 已清仓股票统计
       stats[market].closed_stats.count++
-      stats[market].closed_stats.total_buy += stock.total_buy
-      stats[market].closed_stats.total_sell += stock.total_sell
-      stats[market].closed_stats.total_fees += stock.total_fees
-      stats[market].closed_stats.realized_profit += stock.realized_profit
+      stats[market].closed_stats.total_buy += stock.total_buy || 0
+      stats[market].closed_stats.total_sell += stock.total_sell || 0
+      stats[market].closed_stats.total_fees += stock.total_fees || 0
+      stats[market].closed_stats.realized_profit += stock.realized_profit || 0
     }
   })
 
@@ -552,9 +550,9 @@ const marketStats = computed(() => {
   Object.values(stats).forEach(market => {
     // 持仓统计盈亏
     market.holding_stats.total_profit = 
-      market.holding_stats.holding_profit + 
-      market.holding_stats.realized_profit
-    
+      market.holding_stats.realized_profit + 
+      market.holding_stats.holding_profit
+
     // 持仓统计盈亏率
     market.holding_stats.profit_rate = 
       market.holding_stats.total_buy > 0 
@@ -569,13 +567,14 @@ const marketStats = computed(() => {
 
     // 市场总计
     market.total_profit = 
-      market.holding_stats.holding_profit + 
-      market.holding_stats.realized_profit +
-      market.closed_stats.realized_profit
+      market.realized_profit + 
+      market.holding_profit
 
     // 市场总盈亏率
-    const total_buy = market.holding_stats.total_buy + market.closed_stats.total_buy
-    market.profit_rate = total_buy > 0 ? (market.total_profit / total_buy * 100) : 0
+    market.profit_rate = 
+      market.total_buy > 0 
+        ? (market.total_profit / market.total_buy * 100) 
+        : 0
   })
 
   return stats
@@ -774,16 +773,6 @@ const search = async () => {
         expandedMarkets.value.add(market)
         expandedHoldingGroups.value.add(market)
       })
-      
-      // 如果有选择特定股票，则展开对应的股票明细
-      if (searchForm.stockCodes && searchForm.stockCodes.length > 0) {
-        Object.entries(stockStats.value).forEach(([key, stock]) => {
-          const [market, code] = key.split('-')
-          if (searchForm.stockCodes.includes(code)) {
-            expandedStocks.value.add(key)
-          }
-        })
-      }
     }
   } catch (error) {
     console.error('查询失败:', error)
