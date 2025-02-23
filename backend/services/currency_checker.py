@@ -32,15 +32,22 @@ class CurrencyChecker:
             url = f'https://www.google.com/finance/quote/{query}'
             logger.info(f"查询股价 URL: {url}")
             
+            logger.info(f"开始发送请求...")
             response = requests.get(url, headers=CurrencyChecker.HEADERS, timeout=10)
+            logger.info(f"收到响应，状态码: {response.status_code}")
             response.raise_for_status()
             
+            logger.info("开始解析页面...")
             soup = BeautifulSoup(response.text, 'html.parser')
+            
+            logger.info("开始提取价格...")
             result = CurrencyChecker._extract_price(soup)
             
             if result and result['price']:
-                logger.info(f"获取股票 {query} 价格: {result['price']}")
+                logger.info(f"成功获取股票 {query} 价格: {result['price']}")
                 return result['price']
+            
+            logger.warning(f"未能获取股票 {query} 价格")
             return None
             
         except Exception as e:

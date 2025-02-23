@@ -370,6 +370,7 @@ def get_holding_stocks(user_id):
 def refresh_stock_prices():
     """刷新股票现价"""
     try:
+        logger.info("开始刷新股票现价...")
         # 获取持仓股票列表
         sql = """
             SELECT 
@@ -396,7 +397,11 @@ def refresh_stock_prices():
             END) > 0
         """
         
-        stocks = db.fetch_all(sql, [session.get('user_id')])
+        user_id = session.get('user_id')
+        logger.info(f"查询用户 {user_id} 的持仓股票")
+        stocks = db.fetch_all(sql, [user_id])
+        logger.info(f"找到 {len(stocks)} 支持仓股票")
+        
         results = []
         success_count = 0
         failed_count = 0
@@ -407,16 +412,21 @@ def refresh_stock_prices():
             total_sell = float(stock['total_sell'])
             total_fees = float(stock['total_fees'])
             
+            logger.info(f"处理股票: {stock['market']}-{stock['code']} ({stock['stock_name']})")
+            logger.info(f"持仓数量: {quantity}, 买入总额: {total_buy}, 卖出总额: {total_sell}, 总费用: {total_fees}")
+            
             try:
                 # 获取当前股价
-                query = f"{stock['code']}:{stock['market']}"
+                query = stock['full_name']
                 logger.info(f"查询股价: {query}")
                 price_result = checker.get_stock_price(query)
+                logger.info(f"获取到的股价: {price_result}")
                 
                 if price_result is not None:
                     current_price = float(price_result)
                     # 计算市值
                     market_value = current_price * quantity
+                    logger.info(f"当前价格: {current_price}, 市值: {market_value}")
                     
                     # 获取最后一次买入时的移动加权平均价
                     avg_cost_sql = """
@@ -429,14 +439,17 @@ def refresh_stock_prices():
                         ORDER BY transaction_date DESC, id DESC
                         LIMIT 1
                     """
-                    latest_record = db.fetch_one(avg_cost_sql, [session.get('user_id'), stock['code'], stock['market']])
+                    latest_record = db.fetch_one(avg_cost_sql, [user_id, stock['code'], stock['market']])
                     avg_cost = float(latest_record['current_avg_cost']) if latest_record else 0
+                    logger.info(f"最新买入均价: {avg_cost}")
                     
                     # 计算持仓成本
                     holding_cost = quantity * avg_cost
+                    logger.info(f"持仓成本: {holding_cost}")
                     
                     # 计算持仓盈亏 = 市值 - 持仓成本
                     holding_profit = market_value - holding_cost
+                    logger.info(f"持仓盈亏: {holding_profit}")
                     
                     # 获取已实现盈亏
                     realized_profit_sql = """
@@ -454,14 +467,17 @@ def refresh_stock_prices():
                           AND t.stock_code = %s 
                           AND t.market = %s
                     """
-                    realized_profit_record = db.fetch_one(realized_profit_sql, [session.get('user_id'), stock['code'], stock['market']])
+                    realized_profit_record = db.fetch_one(realized_profit_sql, [user_id, stock['code'], stock['market']])
                     realized_profit = float(realized_profit_record['total_realized_profit'] or 0) if realized_profit_record else 0
+                    logger.info(f"已实现盈亏: {realized_profit}")
                     
                     # 总盈亏 = 已实现盈亏 + 持仓盈亏
                     total_profit = realized_profit + holding_profit
+                    logger.info(f"总盈亏: {total_profit}")
                     
                     # 计算盈亏率
                     profit_rate = (total_profit / total_buy * 100) if total_buy > 0 else 0
+                    logger.info(f"盈亏率: {profit_rate}%")
                     
                     results.append({
                         'market': stock['market'],
@@ -477,6 +493,7 @@ def refresh_stock_prices():
                         'profit_rate': profit_rate
                     })
                     success_count += 1
+                    logger.info(f"股票 {stock['market']}-{stock['code']} 处理成功")
                 else:
                     failed_count += 1
                     logger.error(f"获取股价失败 {stock['market']}:{stock['code']}: 未获取到价格")
@@ -484,6 +501,7 @@ def refresh_stock_prices():
                 failed_count += 1
                 logger.error(f"获取股价失败 {stock['market']}:{stock['code']}: {str(e)}")
         
+        logger.info(f"股价刷新完成: {success_count} 个成功, {failed_count} 个失败")
         return jsonify({
             'success': True,
             'data': {

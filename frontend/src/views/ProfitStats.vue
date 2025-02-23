@@ -215,9 +215,9 @@
                     <td class="text-end" :class="getProfitClass(stock.realized_profit)">
                       {{ formatNumber(stock.realized_profit) }}
                     </td>
-                    <td class="text-end">{{ stock.quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
+                    <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
                     <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                      {{ stock.quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
+                      {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
                     </td>
                     <td class="text-end" :class="getProfitClass(stock.total_profit)">
                       {{ formatNumber(stock.total_profit) }}
@@ -330,9 +330,9 @@
                     <td class="text-end" :class="getProfitClass(stock.realized_profit)">
                       {{ formatNumber(stock.realized_profit) }}
                     </td>
-                    <td class="text-end">{{ stock.quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
+                    <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
                     <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                      {{ stock.quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
+                      {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
                     </td>
                     <td class="text-end" :class="getProfitClass(stock.total_profit)">
                       {{ formatNumber(stock.total_profit) }}
@@ -827,23 +827,41 @@ const resetSearch = () => {
 }
 
 const refreshMarketValue = async () => {
-  if (loading.value) return
+  if (refreshLoading.value) return
   
-  loading.value = true
+  refreshLoading.value = true
   try {
+    console.log('开始刷新市值...')
     const response = await axios.post('/api/profit/refresh_prices')
+    console.log('收到后端响应:', response.data)
+    
     if (response.data.success) {
-      const { success_count, failed_count } = response.data.data
+      const { items, success_count, failed_count } = response.data.data
+      
+      // 更新持仓股票的现价和相关数据
+      items.forEach(item => {
+        const stockKey = `${item.market}-${item.code}`
+        if (stockStats.value[stockKey]) {
+          console.log(`更新股票 ${stockKey} 数据:`, item)
+          stockStats.value[stockKey].current_price = item.current_price
+          stockStats.value[stockKey].market_value = item.market_value
+          stockStats.value[stockKey].holding_profit = item.holding_profit
+          stockStats.value[stockKey].total_profit = item.total_profit
+          stockStats.value[stockKey].profit_rate = item.profit_rate
+        }
+      })
+      
+      // 重新计算市场统计
+      rawMarketStats.value = statsCalculator.calculateMarketStats(stockStats.value, searchForm.stockCodes || [])
+      
       // 显示更新结果
       showToast(`市值更新完成：${success_count} 个成功，${failed_count} 个失败`)
-      // 刷新数据
-      await search()
     }
   } catch (error) {
     console.error('刷新市值失败:', error)
     showToast('刷新市值失败，请稍后重试')
   } finally {
-    loading.value = false
+    refreshLoading.value = false
   }
 }
 
