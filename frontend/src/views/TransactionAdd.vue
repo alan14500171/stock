@@ -261,9 +261,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useDateInput } from '../composables/useDateInput'
 import StockSelector from '../components/StockSelector.vue'
 import axios from 'axios'
+import useMessage from '../composables/useMessage'
 
 const router = useRouter()
 const route = useRoute()
+const message = useMessage()
 const submitting = ref(false)
 const saveAndAddNext = ref(false)
 const isEdit = computed(() => route.params.id !== undefined)
@@ -519,12 +521,10 @@ const submitForm = async () => {
       deposit_fee: Number(form.value.deposit_fee) || 0
     }
     
-    console.log('提交数据:', submitData) // 添加日志
     const response = await axios[method](url, submitData)
-    console.log('服务器响应:', response.data) // 添加日志
 
     if (response.data.success) {
-      showToast(isEdit.value ? '交易记录更新成功' : '交易记录添加成功', 'success')
+      message.success(isEdit.value ? '交易记录更新成功' : '交易记录添加成功')
       if (saveAndAddNext.value) {
         resetForm()
         saveAndAddNext.value = false
@@ -535,46 +535,10 @@ const submitForm = async () => {
       throw new Error(response.data.message || '操作失败')
     }
   } catch (error) {
-    console.error(isEdit.value ? '更新交易记录失败:' : '添加交易记录失败:', error)
-    showToast(error.response?.data?.message || error.message || '操作失败，请稍后重试', 'danger')
+    message.error(error.response?.data?.message || error.message || '操作失败，请稍后重试')
   } finally {
     submitting.value = false
   }
-}
-
-// 添加 toast 提示函数
-const showToast = (message, type = 'danger') => {
-  const toastContainer = document.getElementById('toast-container') || (() => {
-    const container = document.createElement('div')
-    container.id = 'toast-container'
-    container.className = 'position-fixed top-0 end-0 p-3'
-    container.style.zIndex = '1050'
-    document.body.appendChild(container)
-    return container
-  })()
-
-  const toastElement = document.createElement('div')
-  toastElement.className = `toast align-items-center text-white bg-${type} border-0`
-  toastElement.setAttribute('role', 'alert')
-  toastElement.setAttribute('aria-live', 'assertive')
-  toastElement.setAttribute('aria-atomic', 'true')
-  
-  toastElement.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body">
-        ${message}
-      </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-  `
-  
-  toastContainer.appendChild(toastElement)
-  const toast = new bootstrap.Toast(toastElement)
-  toast.show()
-  
-  toastElement.addEventListener('hidden.bs.toast', () => {
-    toastElement.remove()
-  })
 }
 
 // 保存并继续添加

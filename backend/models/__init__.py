@@ -3,7 +3,7 @@
 """
 
 from .user import User
-from .stock import Stock
+from .stock_model import Stock
 from .transaction import StockTransaction, TransactionDetail
 
 __all__ = [

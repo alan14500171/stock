@@ -1115,6 +1115,14 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.card {
+  margin: 1.5rem auto;
+  max-width: 1400px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+  background-color: #fff;
+}
+
 .card-body {
   padding: 0.75rem !important;
 }

@@ -67,77 +67,52 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick } from 'vue'
+import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
+import useMessage from '../composables/useMessage'
 
 const router = useRouter()
 const route = useRoute()
-const loading = ref(false)
-const error = ref('')
-
+const message = useMessage()
 const emit = defineEmits(['login-success'])
 
-const form = reactive({
+const form = ref({
   username: '',
   password: ''
 })
 
+const loading = ref(false)
+const error = ref('')
+
 const handleLogin = async () => {
   if (loading.value) return
-  
   error.value = ''
   loading.value = true
   
   try {
     const response = await axios.post('/api/auth/login', {
-      username: form.username.trim(),
-      password: form.password.trim()
-    }, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      username: form.value.username,
+      password: form.value.password
     })
     
     if (response.data.success) {
-      // 触发登录成功事件
-      emit('login-success')
-      // 登录成功，跳转到之前的页面或默认页面
-      await handleLoginSuccess()
-    } else {
-      error.value = response.data.message || '登录失败'
+      message.success('登录成功')
+      // 只触发登录成功事件，让 App.vue 处理重定向
+      window.dispatchEvent(new Event('login-success'))
     }
-  } catch (err) {
-    console.error('登录失败:', err)
-    if (err.response) {
-      error.value = err.response.data.message || '用户名或密码错误'
-    } else {
-      error.value = '登录失败，请稍后重试'
-    }
+  } catch (error) {
+    console.error('登录失败:', error)
+    message.error(error.response?.data?.message || '登录失败')
   } finally {
     loading.value = false
-  }
-}
-
-const handleLoginSuccess = async () => {
-  try {
-    // 获取重定向地址
-    const redirect = route.query.redirect || '/profit/stats'
-    
-    // 使用 nextTick 确保 DOM 更新完成
-    await nextTick()
-    
-    // 使用 router.push 进行导航
-    await router.push(redirect)
-  } catch (error) {
-    console.error('登录成功后跳转失败:', error)
   }
 }
 </script>
 
 <style scoped>
 .login-container {
-  min-height: 100vh;
+  min-height: calc(100vh - 56px);
   display: flex;
   align-items: center;
   justify-content: center;

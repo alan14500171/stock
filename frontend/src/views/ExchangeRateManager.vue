@@ -777,13 +777,18 @@ onMounted(() => {
 
 /* 卡片样式 */
 .card {
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+  background-color: #fff;
+  margin: 1.5rem auto;
+  max-width: 1400px;
 }
 
 .card-header {
   background-color: #fff;
   border-bottom: 1px solid #dee2e6;
   padding: 0.75rem 1rem;
+  border-radius: 0.5rem 0.5rem 0 0;
 }
 
 .card-body {
@@ -794,6 +799,7 @@ onMounted(() => {
   background-color: #fff;
   border-top: 1px solid #dee2e6;
   padding: 0.75rem 1rem;
+  border-radius: 0 0 0.5rem 0.5rem;
 }
 
 /* 表单样式 */

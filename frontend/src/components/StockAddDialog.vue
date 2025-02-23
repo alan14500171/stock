@@ -95,6 +95,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import axios from 'axios'
+import useMessage from '../composables/useMessage'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -105,6 +106,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'success'])
+const message = useMessage()
 
 const submitting = ref(false)
 const errors = ref({})
@@ -165,7 +167,7 @@ const handleCodeEnter = async (event) => {
   }
   
   errors.value = {}
-  alertMessage.value = ''
+  
   let queryCode = form.value.code.trim()
   
   try {
@@ -190,7 +192,7 @@ const handleCodeEnter = async (event) => {
           stock => stock.code === formattedCode
         )
         if (existingStock) {
-          alertMessage.value = '该股票代码已存在'
+          message.warning('该股票代码已存在')
           resetFormExceptCode()
           const codeInput = document.querySelector('.modal-body input[type="text"]')
           if (codeInput) {
@@ -217,8 +219,7 @@ const handleCodeEnter = async (event) => {
         submitButton.focus()
       }
     } else {
-      form.value.current_price = null
-      alertMessage.value = '查询失败，请检查股票代码是否正确'
+      message.error('查询失败，请检查股票代码是否正确')
       resetFormExceptCode()
       const codeInput = document.querySelector('.modal-body input[type="text"]')
       if (codeInput) {
@@ -226,7 +227,7 @@ const handleCodeEnter = async (event) => {
       }
     }
   } catch (error) {
-    alertMessage.value = '查询失败，请检查股票代码是否正确'
+    message.error('查询失败，请检查股票代码是否正确')
     resetFormExceptCode()
     const codeInput = document.querySelector('.modal-body input[type="text"]')
     if (codeInput) {
@@ -302,7 +303,6 @@ const handleSubmit = async () => {
   if (!validateForm() || submitting.value) return
 
   submitting.value = true
-  alertMessage.value = ''
   
   try {
     // 再次检查股票是否已存在
@@ -318,7 +318,7 @@ const handleSubmit = async () => {
         stock => stock.code === formattedCode
       )
       if (existingStock) {
-        alertMessage.value = '该股票代码已存在'
+        message.warning('该股票代码已存在')
         form.value.current_price = null
         submitting.value = false
         return
@@ -336,14 +336,15 @@ const handleSubmit = async () => {
     const response = await axios.post('/api/stock/stocks', stock)
     
     if (response.data.success) {
+      message.success('股票添加成功')
       emit('success', response.data.data)
       handleClose()
     } else {
-      alertMessage.value = response.data.message || '添加股票失败'
+      message.error(response.data.message || '添加股票失败')
       form.value.current_price = null
     }
   } catch (error) {
-    alertMessage.value = error.response?.data?.message || '添加失败，请稍后重试'
+    message.error(error.response?.data?.message || '添加失败，请稍后重试')
     form.value.current_price = null
   } finally {
     submitting.value = false

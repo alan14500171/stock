@@ -4,7 +4,21 @@ import axios from 'axios'
 const routes = [
   {
     path: '/',
-    redirect: '/profit/stats'
+    name: 'Welcome',
+    component: () => import('../views/Welcome.vue'),
+    meta: {
+      title: '欢迎',
+      requiresAuth: false
+    }
+  },
+  {
+    path: '/home',
+    name: 'Home',
+    component: () => import('../views/Home.vue'),
+    meta: {
+      title: '首页',
+      requiresAuth: true
+    }
   },
   {
     path: '/auth/login',
@@ -112,7 +126,7 @@ router.beforeEach(async (to, from, next) => {
         })
         
         if (response.data.is_authenticated) {
-          return next({ name: 'ProfitStats' })
+          return next({ name: 'Home' })
         }
       } catch (error) {
         console.error('检查登录状态失败:', error)

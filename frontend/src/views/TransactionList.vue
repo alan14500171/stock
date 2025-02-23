@@ -217,11 +217,14 @@ DD: 15"></i>
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
+import useMessage from '../composables/useMessage'
 import DateInput from '../components/DateInput.vue'
 import StockSelector from '../components/StockSelector.vue'
-import axios from 'axios'
+import TransactionItem from '../components/TransactionItem.vue'
 
 const router = useRouter()
+const message = useMessage()
 const loading = ref(false)
 const searchVisible = ref(false)
 const transactions = ref([])
@@ -544,10 +547,13 @@ const confirmDelete = async (transaction) => {
   try {
     const response = await axios.delete(`/api/stock/transactions/${transaction.id}`)
     if (response.data.success) {
+      message.success('交易记录删除成功')
       fetchTransactions()
+    } else {
+      throw new Error(response.data.message || '删除失败')
     }
   } catch (error) {
-    showToast('删除交易记录失败，请稍后重试', 'danger')
+    message.error(error.response?.data?.message || error.message || '删除失败，请稍后重试')
   }
 }
 
@@ -674,6 +680,36 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.card {
+  margin: 1.5rem auto;
+  max-width: 1400px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+  background-color: #fff;
+}
+
+.card-header {
+  background-color: #fff;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.card-body {
+  padding: 1rem;
+}
+
+.card-body.p-0 {
+  padding: 0 !important;
+}
+
+.card-footer {
+  background-color: #fff;
+  border-top: 1px solid #dee2e6;
+  padding: 0.75rem 1rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
 .table {
   margin-bottom: 0;
   font-size: 0.875rem;
@@ -758,12 +794,6 @@ onMounted(() => {
   pointer-events: none;
   background-color: #fff;
   border-color: #dee2e6;
-}
-
-.card-footer {
-  background-color: #fff;
-  border-top: 1px solid #dee2e6;
-  padding: 0.75rem;
 }
 
 /* 操作按钮样式 */

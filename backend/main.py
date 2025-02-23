@@ -1,5 +1,4 @@
-from flask import Flask, send_from_directory, jsonify
-from flask_cors import CORS
+from flask import Flask, send_from_directory, jsonify, request
 import os
 import logging
 from logging.handlers import RotatingFileHandler
@@ -24,17 +23,25 @@ def create_app():
     app.config['JSON_AS_ASCII'] = False  # 支持中文
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 最大请求大小16MB
 
-    # CORS配置
-    CORS(app, supports_credentials=True, resources={
-        r"/api/*": {
-            "origins": [
-                "http://localhost:9009",
-                "http://127.0.0.1:9009"
-            ],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
-        }
-    })
+    # 添加CORS支持
+    @app.after_request
+    def after_request(response):
+        allowed_origins = [
+            'http://localhost:9009',
+            'http://127.0.0.1:9009',
+            'http://localhost:9099',
+            'http://127.0.0.1:9099',
+            'http://localhost:5173',
+            'http://127.0.0.1:5173'
+        ]
+        origin = request.headers.get('Origin')
+        if origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Expose-Headers'] = 'Set-Cookie'
+        return response
 
     # 注册蓝图
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
