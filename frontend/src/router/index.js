@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import axios from 'axios'
 
 const routes = [
   {
@@ -26,7 +27,7 @@ const routes = [
   {
     path: '/profit/stats',
     name: 'ProfitStats',
-    component: () => import('../views/ProfitStats.vue'),
+    component: () => import('@/views/ProfitStats.vue'),
     meta: {
       title: '盈利统计',
       requiresAuth: true
@@ -93,12 +94,11 @@ router.beforeEach(async (to, from, next) => {
     // 检查路由是否需要认证
     if (to.meta.requiresAuth) {
       // 检查登录状态
-      const response = await fetch('/api/auth/check_login', {
-        credentials: 'include'  // 包含 cookies
+      const response = await axios.get('/api/auth/check_login', {
+        withCredentials: true  // 确保发送 cookies
       })
-      const data = await response.json()
       
-      if (!data.is_authenticated) {
+      if (!response.data.is_authenticated) {
         // 未登录，重定向到登录页
         return next({ 
           name: 'Login', 
@@ -107,12 +107,11 @@ router.beforeEach(async (to, from, next) => {
       }
     } else if ((to.name === 'Login' || to.name === 'Register') && from.name !== 'Login') {
       try {
-        const response = await fetch('/api/auth/check_login', {
-          credentials: 'include'
+        const response = await axios.get('/api/auth/check_login', {
+          withCredentials: true
         })
-        const data = await response.json()
         
-        if (data.is_authenticated) {
+        if (response.data.is_authenticated) {
           return next({ name: 'ProfitStats' })
         }
       } catch (error) {
@@ -123,6 +122,13 @@ router.beforeEach(async (to, from, next) => {
     next()
   } catch (error) {
     console.error('路由守卫错误:', error)
+    // 如果检查登录状态失败，为了安全起见，重定向到登录页
+    if (to.meta.requiresAuth) {
+      return next({ 
+        name: 'Login', 
+        query: { redirect: to.fullPath }
+      })
+    }
     next()
   }
 })

@@ -49,20 +49,19 @@ const isAuthenticated = ref(false)
 // 检查登录状态
 const checkAuth = async () => {
   try {
-    const response = await fetch('/api/auth/check_login', {
-      credentials: 'include'
+    const response = await axios.get('/api/auth/check_login', {
+      withCredentials: true
     })
-    const data = await response.json()
-    isAuthenticated.value = data.is_authenticated
-    if (data.is_authenticated) {
-      router.push('/profit/stats')
-    } else {
+    isAuthenticated.value = response.data.is_authenticated
+    if (!isAuthenticated.value && router.currentRoute.value.meta.requiresAuth) {
       router.push('/auth/login')
     }
   } catch (error) {
     console.error('检查登录状态失败:', error)
     isAuthenticated.value = false
-    router.push('/auth/login')
+    if (router.currentRoute.value.meta.requiresAuth) {
+      router.push('/auth/login')
+    }
   }
 }
 

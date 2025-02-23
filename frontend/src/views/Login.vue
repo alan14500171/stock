@@ -122,7 +122,7 @@ const handleLogin = async () => {
 const handleLoginSuccess = async () => {
   try {
     // 获取重定向地址
-    const redirect = route.query.redirect || '/profit-stats'
+    const redirect = route.query.redirect || '/profit/stats'
     
     // 使用 nextTick 确保 DOM 更新完成
     await nextTick()

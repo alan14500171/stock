@@ -142,6 +142,19 @@ class Database:
         if not self.pool:
             self.init_pool({})
 
+    def is_connected(self):
+        """检查数据库连接状态"""
+        if not self.pool:
+            return False
+        try:
+            with self.get_connection() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败: {str(e)}")
+            return False
+
     @contextmanager
     def get_connection(self):
         """获取数据库连接的上下文管理器"""
