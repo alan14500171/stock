@@ -265,17 +265,17 @@
                                   </td>
                                   <td class="text-end cost">
                                     <template v-if="detail.transaction_type === 'BUY'">
-                                      {{ formatNumber(detail.current_average_cost, 3) }}
+                                      {{ formatNumber(detail.current_avg_cost, 3) }}
                                     </template>
                                     <template v-else>
-                                      {{ formatNumber(detail.sold_average_cost, 3) }}
+                                      {{ formatNumber(detail.prev_avg_cost, 3) }}
                                     </template>
                                   </td>
                                   <td class="text-end amount">
                                     {{ detail.transaction_type === 'SELL' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end fees">
-                                    {{ formatNumber(detail.total_fees_hkd) }}
+                                    {{ formatNumber(detail.total_fees) }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
                                     {{ detail.transaction_type === 'SELL' ? formatNumber(calculateProfit(detail)) : '-' }}
@@ -380,17 +380,17 @@
                                   </td>
                                   <td class="text-end cost">
                                     <template v-if="detail.transaction_type === 'BUY'">
-                                      {{ formatNumber(detail.current_average_cost, 3) }}
+                                      {{ formatNumber(detail.current_avg_cost, 3) }}
                                     </template>
                                     <template v-else>
-                                      {{ formatNumber(detail.sold_average_cost, 3) }}
+                                      {{ formatNumber(detail.prev_avg_cost, 3) }}
                                     </template>
                                   </td>
                                   <td class="text-end amount">
                                     {{ detail.transaction_type === 'SELL' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end fees">
-                                    {{ formatNumber(detail.total_fees_hkd) }}
+                                    {{ formatNumber(detail.total_fees) }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
                                     {{ detail.transaction_type === 'SELL' ? formatNumber(calculateProfit(detail)) : '-' }}
@@ -590,16 +590,16 @@ const getHoldingStocks = (market) => {
       
       if (searchForm.stockCodes?.length > 0) {
         return stockMarket === market && 
-               stock.quantity > 0 && 
+               stock.current_quantity > 0 && 
                searchForm.stockCodes.includes(stockCode)
       }
-      return stockMarket === market && stock.quantity > 0
+      return stockMarket === market && stock.current_quantity > 0
     })
     .map(([key, stock]) => ({
       code: key.split('-')[1],
       ...stock
     }))
-    .sort((a, b) => b.market_value - a.market_value)
+    .sort((a, b) => b.total_buy - a.total_buy)
 }
 
 // 获取市场已清仓股票
@@ -611,10 +611,10 @@ const getClosedStocks = (market) => {
       
       if (searchForm.stockCodes?.length > 0) {
         return stockMarket === market && 
-               stock.quantity <= 0 && 
+               stock.current_quantity <= 0 && 
                searchForm.stockCodes.includes(stockCode)
       }
-      return stockMarket === market && stock.quantity <= 0
+      return stockMarket === market && stock.current_quantity <= 0
     })
     .map(([key, stock]) => ({
       code: key.split('-')[1],
@@ -749,19 +749,15 @@ const showToast = (message) => {
 }
 
 const search = async () => {
-  if (loading.value) return
-  
   loading.value = true
   try {
-    const params = new URLSearchParams()
-    if (searchForm.startDate) params.append('start_date', searchForm.startDate)
-    if (searchForm.endDate) params.append('end_date', searchForm.endDate)
-    if (searchForm.market) params.append('market', searchForm.market)
-    if (searchForm.stockCodes && searchForm.stockCodes.length > 0) {
-      searchForm.stockCodes.forEach(code => params.append('stock_codes[]', code))
-    }
+    const params = {}
+    if (searchForm.startDate) params.start_date = searchForm.startDate
+    if (searchForm.endDate) params.end_date = searchForm.endDate
+    if (searchForm.market) params.market = searchForm.market
     
     const response = await axios.get('/api/profit/', { params })
+    
     if (response.data.success) {
       marketStats.value = response.data.data.market_stats || {}
       stockStats.value = response.data.data.stock_stats || {}
@@ -778,11 +774,12 @@ const search = async () => {
           const [market, code] = key.split('-')
           if (searchForm.stockCodes.includes(code)) {
             expandedMarkets.value.add(market)
-            if (stock.quantity > 0) {
+            if (stock.current_quantity > 0) {
               expandedHoldingGroups.value.add(market)
             } else {
               expandedClosedGroups.value.add(market)
             }
+            expandedStocks.value.add(key)
           }
         })
       } else {

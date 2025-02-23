@@ -12,6 +12,135 @@ profit_bp = Blueprint('profit', __name__)
 checker = CurrencyChecker()
 logger = logging.getLogger(__name__)
 
+def process_transactions(transactions):
+    """处理交易数据，生成统计信息"""
+    market_stats = {}
+    stock_stats = {}
+    transaction_details = {}
+    
+    # 按日期排序交易记录
+    transactions.sort(key=lambda x: x['transaction_date'])
+    
+    for transaction in transactions:
+        market = transaction['market']
+        stock_code = f"{market}-{transaction['stock_code']}"
+        transaction_type = transaction['transaction_type']
+        total_amount = float(transaction['total_amount'])
+        total_fees = float(transaction['total_fees'])
+        total_quantity = float(transaction['total_quantity'])
+        prev_avg_cost = float(transaction['prev_avg_cost']) if transaction['prev_avg_cost'] else 0
+        
+        # 初始化市场统计
+        if market not in market_stats:
+            market_stats[market] = {
+                'transaction_count': 0,
+                'total_buy': 0,
+                'total_sell': 0,
+                'total_fees': 0,
+                'realized_profit': 0,
+                'holding_profit': 0,
+                'total_profit': 0,
+                'profit_rate': 0,
+                'holding_stats': {
+                    'count': 0,
+                    'total_buy': 0,
+                    'total_sell': 0,
+                    'total_fees': 0,
+                    'realized_profit': 0,
+                    'holding_profit': 0,
+                    'total_profit': 0,
+                    'profit_rate': 0
+                },
+                'closed_stats': {
+                    'count': 0,
+                    'total_buy': 0,
+                    'total_sell': 0,
+                    'total_fees': 0,
+                    'realized_profit': 0,
+                    'profit_rate': 0
+                }
+            }
+
+        # 初始化股票统计
+        if stock_code not in stock_stats:
+            stock_stats[stock_code] = {
+                'market': market,
+                'stock_code': transaction['stock_code'],
+                'stock_name': transaction['stock_name'],
+                'current_quantity': 0,
+                'total_buy': 0,
+                'total_sell': 0,
+                'total_fees': 0,
+                'realized_profit': 0,
+                'holding_profit': 0,
+                'total_profit': 0,
+                'profit_rate': 0,
+                'transaction_count': 0
+            }
+            transaction_details[stock_code] = []
+
+        # 更新统计数据
+        market_stats[market]['transaction_count'] += 1
+        stock_stats[stock_code]['transaction_count'] += 1
+        
+        if transaction_type == 'BUY':
+            stock_stats[stock_code]['total_buy'] += total_amount
+            stock_stats[stock_code]['current_quantity'] += total_quantity
+            market_stats[market]['total_buy'] += total_amount
+            market_stats[market]['holding_stats']['total_buy'] += total_amount
+        else:  # SELL
+            stock_stats[stock_code]['total_sell'] += total_amount
+            stock_stats[stock_code]['current_quantity'] -= total_quantity
+            realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
+            stock_stats[stock_code]['realized_profit'] += realized_profit
+            market_stats[market]['realized_profit'] += realized_profit
+            market_stats[market]['total_sell'] += total_amount
+            market_stats[market]['holding_stats']['total_sell'] += total_amount
+            market_stats[market]['holding_stats']['realized_profit'] += realized_profit
+
+        # 更新手续费
+        stock_stats[stock_code]['total_fees'] += total_fees
+        market_stats[market]['total_fees'] += total_fees
+        market_stats[market]['holding_stats']['total_fees'] += total_fees
+
+        # 添加交易记录
+        transaction_details[stock_code].append(transaction)
+
+    # 处理持仓和已清仓分类
+    for stock_code, stock in stock_stats.items():
+        market = stock['market']
+        
+        # 计算盈亏率
+        if stock['total_buy'] > 0:
+            stock['profit_rate'] = round(stock['realized_profit'] / stock['total_buy'] * 100, 2)
+            
+        if stock['current_quantity'] > 0:
+            market_stats[market]['holding_stats']['count'] += 1
+        else:
+            # 移动到已清仓统计
+            market_stats[market]['closed_stats']['count'] += 1
+            market_stats[market]['closed_stats']['total_buy'] += stock['total_buy']
+            market_stats[market]['closed_stats']['total_sell'] += stock['total_sell']
+            market_stats[market]['closed_stats']['total_fees'] += stock['total_fees']
+            market_stats[market]['closed_stats']['realized_profit'] += stock['realized_profit']
+            
+            # 从持仓统计中减去
+            market_stats[market]['holding_stats']['total_buy'] -= stock['total_buy']
+            market_stats[market]['holding_stats']['total_sell'] -= stock['total_sell']
+            market_stats[market]['holding_stats']['total_fees'] -= stock['total_fees']
+            market_stats[market]['holding_stats']['realized_profit'] -= stock['realized_profit']
+
+    # 计算市场级别的盈亏率
+    for market in market_stats:
+        if market_stats[market]['total_buy'] > 0:
+            market_stats[market]['profit_rate'] = round(market_stats[market]['realized_profit'] / market_stats[market]['total_buy'] * 100, 2)
+        if market_stats[market]['holding_stats']['total_buy'] > 0:
+            market_stats[market]['holding_stats']['profit_rate'] = round(market_stats[market]['holding_stats']['realized_profit'] / market_stats[market]['holding_stats']['total_buy'] * 100, 2)
+        if market_stats[market]['closed_stats']['total_buy'] > 0:
+            market_stats[market]['closed_stats']['profit_rate'] = round(market_stats[market]['closed_stats']['realized_profit'] / market_stats[market]['closed_stats']['total_buy'] * 100, 2)
+
+    return market_stats, stock_stats, transaction_details
+
 @profit_bp.route('/')
 @login_required
 def get_profit_stats():
@@ -22,12 +151,11 @@ def get_profit_stats():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         market = request.args.get('market')
-        stock_codes = request.args.getlist('stock_codes[]')
 
         # 2. 构建查询条件
         conditions = ['t.user_id = %s']
         params = [user_id]
-        
+
         if start_date:
             conditions.append('t.transaction_date >= %s')
             params.append(start_date)
@@ -37,219 +165,77 @@ def get_profit_stats():
         if market:
             conditions.append('t.market = %s')
             params.append(market)
-        if stock_codes:
-            placeholders = ','.join(['%s'] * len(stock_codes))
-            conditions.append(f't.stock_code IN ({placeholders})')
-            params.extend(stock_codes)
 
         where_clause = ' AND '.join(conditions)
 
         # 3. 获取交易明细数据
-        details_sql = f"""
-            WITH base_transactions AS (
+        sql = f"""
+            WITH last_buy_prices AS (
                 SELECT 
-                    t.*,
-                    s.name as stock_name,
-                    (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees
-                FROM stock.stock_transactions t
-                LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-                WHERE {where_clause}
-                ORDER BY t.market, t.stock_code, t.transaction_date, t.id
-            ),
-            running_totals AS (
-                SELECT 
-                    t1.*,
-                    @prev_qty := IF(
-                        @current_stock = CONCAT(t1.market, t1.stock_code),
-                        @qty,
-                        0
-                    ) as prev_quantity,
-                    @prev_cost := IF(
-                        @current_stock = CONCAT(t1.market, t1.stock_code),
-                        @cost,
-                        0
-                    ) as prev_cost,
-                    @prev_avg_cost := IF(
-                        @current_stock = CONCAT(t1.market, t1.stock_code) AND @qty > 0,
-                        @cost / @qty,
-                        0
-                    ) as prev_avg_cost,
-                    @qty := IF(
-                        @current_stock = CONCAT(t1.market, t1.stock_code),
-                        IF(
-                            t1.transaction_type = 'BUY',
-                            @qty + t1.total_quantity,
-                            @qty - t1.total_quantity
-                        ),
-                        IF(
-                            t1.transaction_type = 'BUY',
-                            t1.total_quantity,
-                            -t1.total_quantity
-                        )
-                    ) as current_quantity,
-                    @cost := IF(
-                        @current_stock = CONCAT(t1.market, t1.stock_code),
-                        IF(
-                            t1.transaction_type = 'BUY',
-                            @cost + t1.total_amount + t1.total_fees,
-                            IF(@qty > t1.total_quantity, 
-                               @cost * (@qty - t1.total_quantity) / @qty,
-                               0)
-                        ),
-                        IF(
-                            t1.transaction_type = 'BUY',
-                            t1.total_amount + t1.total_fees,
-                            0
-                        )
-                    ) as current_cost,
-                    @current_stock := CONCAT(t1.market, t1.stock_code) as _group_key
+                    market,
+                    stock_code,
+                    current_avg_cost as last_buy_price
                 FROM (
-                    SELECT @qty := 0, @cost := 0, @current_stock := '', @prev_qty := 0, @prev_cost := 0, @prev_avg_cost := 0
-                ) vars, base_transactions t1
+                    SELECT 
+                        market,
+                        stock_code,
+                        current_avg_cost,
+                        ROW_NUMBER() OVER (PARTITION BY market, stock_code 
+                                         ORDER BY transaction_date DESC, created_at DESC) as rn
+                    FROM stock.stock_transactions
+                    WHERE transaction_type = 'BUY'
+                    AND user_id = %s
+                ) ranked
+                WHERE rn = 1
             )
             SELECT 
-                t.*,
-                GROUP_CONCAT(
-                    CONCAT(
-                        COALESCE(td.quantity, ''),
-                        '@',
-                        COALESCE(td.price, ''),
-                        '@',
-                        COALESCE(td.quantity * td.price, '')
-                    ) ORDER BY td.id ASC
-                ) as detail_info
-            FROM running_totals t
-            LEFT JOIN stock.stock_transaction_details td ON t.id = td.transaction_id
-            GROUP BY t.id
-            ORDER BY t.market, t.stock_code, t.transaction_date DESC, t.id DESC
-        """
-
-        # 4. 获取股票统计数据
-        stock_sql = f"""
-            SELECT 
+                t.id,
                 t.market,
                 t.stock_code,
                 s.name as stock_name,
-                COUNT(DISTINCT t.id) as transaction_count,
-                SUM(CASE WHEN t.transaction_type = 'BUY' THEN t.total_quantity ELSE -t.total_quantity END) as quantity,
-                SUM(CASE WHEN t.transaction_type = 'BUY' THEN t.total_amount ELSE 0 END) as total_buy,
-                SUM(CASE WHEN t.transaction_type = 'SELL' THEN t.total_amount ELSE 0 END) as total_sell,
-                SUM(t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                SUM(
-                    CASE 
-                        WHEN t.transaction_type = 'SELL' THEN 
-                            t.total_amount - (t.total_quantity * t.prev_avg_cost) - 
-                            (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
-                        ELSE 0 
-                    END
-                ) as realized_profit
+                t.transaction_type,
+                t.transaction_date,
+                t.transaction_code,
+                t.total_quantity,
+                t.total_amount,
+                t.broker_fee,
+                t.transaction_levy,
+                t.stamp_duty,
+                t.trading_fee,
+                t.deposit_fee,
+                t.prev_avg_cost,
+                t.current_avg_cost,
+                (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
+                lbp.last_buy_price
             FROM stock.stock_transactions t
             LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
+            LEFT JOIN last_buy_prices lbp ON t.market = lbp.market AND t.stock_code = lbp.stock_code
             WHERE {where_clause}
-            GROUP BY t.market, t.stock_code, s.name
+            ORDER BY t.market, t.stock_code, t.transaction_date DESC, t.id DESC
         """
 
-        # 5. 执行查询
-        transaction_details = db.fetch_all(details_sql, params)
-        stock_stats = db.fetch_all(stock_sql, params)
+        transactions = db.fetch_all(sql, params + [user_id])
 
-        # 6. 处理数据
-        transaction_details_dict = {}
-        stock_stats_dict = {}
-        
-        # 处理交易明细
-        for detail in transaction_details:
-            key = f"{detail['market']}-{detail['stock_code']}"
-            if key not in transaction_details_dict:
-                transaction_details_dict[key] = []
-            
-            # 转换日期格式
-            if isinstance(detail['transaction_date'], datetime):
-                detail['transaction_date'] = detail['transaction_date'].strftime('%Y-%m-%d')
-            
-            # 转换数值类型
-            for field in ['total_amount', 'total_quantity', 'total_fees', 
-                         'prev_quantity', 'prev_cost', 'prev_avg_cost',
-                         'current_quantity', 'current_cost']:
-                if detail[field] is not None:
-                    detail[field] = float(detail[field])
-            
-            # 转换交易类型为大写
-            detail['transaction_type'] = detail['transaction_type'].upper()
-            
-            transaction_details_dict[key].append(detail)
-        
-        # 处理股票统计
-        for stock in stock_stats:
-            key = f"{stock['market']}-{stock['stock_code']}"
-            
-            # 转换数值类型
-            for field in ['transaction_count', 'quantity', 'total_buy', 'total_sell', 
-                         'total_fees', 'realized_profit']:
-                if stock[field] is not None:
-                    stock[field] = float(stock[field])
-            
-            # 获取当前价格
-            current_price = 0
-            market_value = 0
-            holding_profit = 0
-            
-            if stock['quantity'] > 0:
-                try:
-                    query = f"{stock['stock_code']}:{stock['market']}"
-                    price_result = checker.get_stock_price(query)
-                    if price_result is not None:
-                        current_price = float(price_result)
-                        market_value = current_price * stock['quantity']
-                        
-                        # 获取最新的移动加权平均价
-                        latest_transaction = next(
-                            (t for t in reversed(transaction_details_dict.get(key, []))
-                             if t['transaction_type'] == 'BUY'),
-                            None
-                        )
-                        if latest_transaction:
-                            avg_cost = latest_transaction['current_cost'] / latest_transaction['current_quantity']
-                            holding_cost = avg_cost * stock['quantity']
-                            holding_profit = market_value - holding_cost
-                except Exception as e:
-                    logger.error(f"获取股价失败 {stock['market']}:{stock['stock_code']}: {str(e)}")
-            
-            # 计算总盈亏和盈亏率
-            total_profit = stock['realized_profit'] + holding_profit
-            profit_rate = (total_profit / stock['total_buy'] * 100) if stock['total_buy'] > 0 else 0
-            
-            stock_stats_dict[key] = {
-                'market': stock['market'],
-                'code': stock['stock_code'],
-                'name': stock['stock_name'],
-                'quantity': stock['quantity'],
-                'transaction_count': stock['transaction_count'],
-                'total_buy': stock['total_buy'],
-                'total_sell': stock['total_sell'],
-                'total_fees': stock['total_fees'],
-                'realized_profit': stock['realized_profit'],
-                'current_price': current_price,
-                'market_value': market_value,
-                'holding_profit': holding_profit,
-                'total_profit': total_profit,
-                'profit_rate': profit_rate
-            }
+        # 4. 处理数据
+        market_stats, stock_stats, transaction_details = process_transactions(transactions)
 
         return jsonify({
             'success': True,
             'data': {
-                'stock_stats': stock_stats_dict,
-                'transaction_details': transaction_details_dict
+                'market_stats': market_stats,
+                'stock_stats': stock_stats,
+                'transaction_details': transaction_details
             }
         })
 
     except Exception as e:
-        logger.error(f"获取盈利统计数据失败: {str(e)}")
+        print(f"Error in get_profit_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'message': '获取盈利统计数据失败'
-        }), 500
+            'message': f'获取盈利统计数据失败: {str(e)}'
+        })
 
 def get_holding_stocks(user_id):
     """获取用户的持仓股票列表"""
@@ -367,7 +353,7 @@ def refresh_stock_prices():
             
             try:
                 # 获取当前股价
-                query = stock['full_name'] if stock.get('full_name') else f"{stock['code']}:NASDAQ"
+                query = f"{stock['code']}:{stock['market']}"
                 logger.info(f"查询股价: {query}")
                 price_result = checker.get_stock_price(query)
                 
