@@ -116,7 +116,7 @@ DD: 15"></i>
           </thead>
           <tbody>
             <template v-if="!loading">
-              <tr v-for="transaction in transactions" :key="transaction.id">
+              <tr v-for="transaction in sortedTransactions" :key="transaction.id">
                 <td>{{ formatDate(transaction.transaction_date) }}</td>
                 <td>{{ transaction.market }}</td>
                 <td class="text-center">
@@ -670,6 +670,28 @@ const displayedPages = computed(() => {
   }
   
   return range
+})
+
+// 在 script setup 部分修改计算属性
+const sortedTransactions = computed(() => {
+  return [...transactions.value].sort((a, b) => {
+    // 首先按交易日期降序排序
+    const dateA = new Date(a.transaction_date).getTime()
+    const dateB = new Date(b.transaction_date).getTime()
+    if (dateA !== dateB) {
+      return dateB - dateA
+    }
+    
+    // 如果日期相同，按创建时间降序排序
+    const createdAtA = new Date(a.created_at).getTime()
+    const createdAtB = new Date(b.created_at).getTime()
+    if (createdAtA !== createdAtB) {
+      return createdAtB - createdAtA
+    }
+    
+    // 如果创建时间也相同，按ID降序排序
+    return b.id - a.id
+  })
 })
 
 // 初始化

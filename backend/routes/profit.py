@@ -19,7 +19,7 @@ def process_transactions(transactions):
     transaction_details = {}
     
     # 按日期排序交易记录
-    transactions.sort(key=lambda x: x['transaction_date'])
+    transactions.sort(key=lambda x: (x['transaction_date'], x['id']))
     
     # 按股票分组处理交易记录
     stock_groups = {}
@@ -70,7 +70,7 @@ def process_transactions(transactions):
         market = stock_transactions[0]['market']
         stock_code = stock_transactions[0]['stock_code']
         stock_name = stock_transactions[0]['stock_name']
-        current_price = float(stock_transactions[0]['last_buy_price'] or 0)
+        current_price = float(stock_transactions[0]['current_avg_cost'] if stock_transactions[0].get('current_avg_cost') else 0)
         
         # 初始化股票统计
         stock_stats[stock_key] = {
@@ -95,6 +95,7 @@ def process_transactions(transactions):
         transaction_details[stock_key] = []
         
         # 计算股票统计数据
+        last_buy_transaction = None
         for trans in stock_transactions:
             total_amount = float(trans['total_amount'] or 0)
             total_quantity = float(trans['total_quantity'] or 0)
@@ -104,6 +105,7 @@ def process_transactions(transactions):
             if trans['transaction_type'] == 'BUY':
                 stock_stats[stock_key]['current_quantity'] += total_quantity
                 stock_stats[stock_key]['total_buy'] += total_amount
+                last_buy_transaction = trans
             else:  # SELL
                 stock_stats[stock_key]['current_quantity'] -= total_quantity
                 stock_stats[stock_key]['total_sell'] += total_amount
@@ -117,11 +119,8 @@ def process_transactions(transactions):
         # 计算持仓市值和持仓盈亏
         current_quantity = stock_stats[stock_key]['current_quantity']
         if current_quantity > 0:
-            # 计算平均成本
-            stock_stats[stock_key]['average_cost'] = (
-                stock_stats[stock_key]['total_buy'] - 
-                stock_stats[stock_key]['total_sell']
-            ) / current_quantity
+            # 使用最后一次买入的移动加权平均价格作为平均成本
+            stock_stats[stock_key]['average_cost'] = float(last_buy_transaction['current_avg_cost']) if last_buy_transaction else 0
             
             # 计算市值
             market_value = current_quantity * current_price
@@ -226,24 +225,6 @@ def get_profit_stats():
 
         # 3. 获取交易明细数据
         sql = f"""
-            WITH last_buy_prices AS (
-                SELECT 
-                    market,
-                    stock_code,
-                    current_avg_cost as last_buy_price
-                FROM (
-                    SELECT 
-                        market,
-                        stock_code,
-                        current_avg_cost,
-                        ROW_NUMBER() OVER (PARTITION BY market, stock_code 
-                                         ORDER BY transaction_date DESC, created_at DESC) as rn
-                    FROM stock.stock_transactions
-                    WHERE transaction_type = 'BUY'
-                    AND user_id = %s
-                ) ranked
-                WHERE rn = 1
-            )
             SELECT 
                 t.id,
                 t.market,
@@ -262,15 +243,14 @@ def get_profit_stats():
                 t.prev_avg_cost,
                 t.current_avg_cost,
                 (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                lbp.last_buy_price
+                t.created_at
             FROM stock.stock_transactions t
             LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-            LEFT JOIN last_buy_prices lbp ON t.market = lbp.market AND t.stock_code = lbp.stock_code
             WHERE {where_clause}
-            ORDER BY t.market, t.stock_code, t.transaction_date DESC, t.id DESC
+            ORDER BY t.transaction_date DESC, t.id DESC
         """
 
-        transactions = db.fetch_all(sql, params + [user_id])
+        transactions = db.fetch_all(sql, params)
 
         # 4. 处理数据
         market_stats, stock_stats, transaction_details = process_transactions(transactions)

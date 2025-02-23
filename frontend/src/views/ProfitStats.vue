@@ -99,7 +99,7 @@
               <th class="text-end">股票数量</th>
               <th class="text-end">笔数</th>
               <th class="text-end">买入总额</th>
-              <th class="text-end">平均价格</th>
+              <th class="text-end">移动加权平均价	</th>
               <th class="text-end">卖出总额</th>
               <th class="text-end">费用</th>
               <th class="text-end">已实现盈亏</th>
@@ -248,7 +248,7 @@
                             </thead>
                             <tbody>
                               <template v-if="transactionDetails[`${market}-${stock.code}`]">
-                                <tr v-for="detail in transactionDetails[`${market}-${stock.code}`]" :key="detail.id">
+                                <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
                                   <td class="transaction-info">
                                     {{ formatDate(detail.transaction_date) }}
                                     <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
@@ -363,7 +363,7 @@
                             </thead>
                             <tbody>
                               <template v-if="transactionDetails[`${market}-${stock.code}`]">
-                                <tr v-for="detail in transactionDetails[`${market}-${stock.code}`]" :key="detail.id">
+                                <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
                                   <td class="transaction-info">
                                     {{ formatDate(detail.transaction_date) }}
                                     <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
@@ -484,7 +484,7 @@ const useStatsCalculator = () => {
     
     // 遍历所有股票统计数据
     Object.entries(stockData).forEach(([key, stock]) => {
-      const [market] = key.split('-')
+      const [stockMarket] = key.split('-')
       const stockCode = key.split('-')[1]
       
       // 如果有筛选条件且当前股票不在筛选范围内,则跳过
@@ -493,8 +493,8 @@ const useStatsCalculator = () => {
       }
       
       // 初始化市场统计
-      if (!stats[market]) {
-        stats[market] = {
+      if (!stats[stockMarket]) {
+        stats[stockMarket] = {
           total_stocks: 0,
           transaction_count: 0,
           total_buy: 0,
@@ -528,32 +528,32 @@ const useStatsCalculator = () => {
       }
 
       // 更新市场统计
-      stats[market].transaction_count += stock.transaction_count || 0
-      stats[market].total_buy += stock.total_buy || 0
-      stats[market].total_sell += stock.total_sell || 0
-      stats[market].total_fees += stock.total_fees || 0
-      stats[market].realized_profit += stock.realized_profit || 0
-      stats[market].market_value += stock.market_value || 0
-      stats[market].holding_profit += stock.holding_profit || 0
+      stats[stockMarket].transaction_count += stock.transaction_count || 0
+      stats[stockMarket].total_buy += stock.total_buy || 0
+      stats[stockMarket].total_sell += stock.total_sell || 0
+      stats[stockMarket].total_fees += stock.total_fees || 0
+      stats[stockMarket].realized_profit += stock.realized_profit || 0
+      stats[stockMarket].market_value += stock.market_value || 0
+      stats[stockMarket].holding_profit += stock.holding_profit || 0
       
       if (stock.current_quantity > 0) {
         // 持仓股票统计
-        stats[market].total_stocks += 1
-        stats[market].holding_stats.count++
-        stats[market].holding_stats.total_buy += stock.total_buy || 0
-        stats[market].holding_stats.total_sell += stock.total_sell || 0
-        stats[market].holding_stats.total_fees += stock.total_fees || 0
-        stats[market].holding_stats.realized_profit += stock.realized_profit || 0
-        stats[market].holding_stats.market_value += stock.market_value || 0
-        stats[market].holding_stats.holding_profit += stock.holding_profit || 0
+        stats[stockMarket].total_stocks += 1
+        stats[stockMarket].holding_stats.count++
+        stats[stockMarket].holding_stats.total_buy += stock.total_buy || 0
+        stats[stockMarket].holding_stats.total_sell += stock.total_sell || 0
+        stats[stockMarket].holding_stats.total_fees += stock.total_fees || 0
+        stats[stockMarket].holding_stats.realized_profit += stock.realized_profit || 0
+        stats[stockMarket].holding_stats.market_value += stock.market_value || 0
+        stats[stockMarket].holding_stats.holding_profit += stock.holding_profit || 0
       } else {
         // 已清仓股票统计
-        stats[market].total_stocks += 1
-        stats[market].closed_stats.count++
-        stats[market].closed_stats.total_buy += stock.total_buy || 0
-        stats[market].closed_stats.total_sell += stock.total_sell || 0
-        stats[market].closed_stats.total_fees += stock.total_fees || 0
-        stats[market].closed_stats.realized_profit += stock.realized_profit || 0
+        stats[stockMarket].total_stocks += 1
+        stats[stockMarket].closed_stats.count++
+        stats[stockMarket].closed_stats.total_buy += stock.total_buy || 0
+        stats[stockMarket].closed_stats.total_sell += stock.total_sell || 0
+        stats[stockMarket].closed_stats.total_fees += stock.total_fees || 0
+        stats[stockMarket].closed_stats.realized_profit += stock.realized_profit || 0
       }
     })
 
@@ -1140,6 +1140,21 @@ const fetchStocks = async () => {
   } catch (error) {
     console.error('获取股票列表失败:', error)
   }
+}
+
+// 添加交易明细排序函数
+const sortTransactionDetails = (details) => {
+  if (!details) return [];
+  return [...details].sort((a, b) => {
+    // 先按交易日期降序排序
+    const dateA = new Date(a.transaction_date).getTime();
+    const dateB = new Date(b.transaction_date).getTime();
+    if (dateA !== dateB) {
+      return dateB - dateA;
+    }
+    // 如果交易日期相同，按ID降序排序
+    return b.id - a.id;
+  });
 }
 
 // 初始化
