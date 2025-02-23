@@ -476,28 +476,26 @@ const focusNext = (event, target) => {
   }
 }
 
-// 计算属性
-const marketStats = computed(() => {
-  const stats = {}
-  
-  // 遍历所有股票统计数据
-  Object.entries(stockStats.value).forEach(([key, stock]) => {
-    const [market] = key.split('-')
+// 统计计算模块
+const useStatsCalculator = () => {
+  // 计算市场统计数据
+  const calculateMarketStats = (stockData, filterCodes = []) => {
+    const stats = {}
     
-    // 初始化市场统计
-    if (!stats[market]) {
-      stats[market] = {
-        transaction_count: 0,
-        total_buy: 0,
-        total_sell: 0,
-        total_fees: 0,
-        realized_profit: 0,
-        market_value: 0,
-        holding_profit: 0,
-        total_profit: 0,
-        profit_rate: 0,
-        holding_stats: {
-          count: 0,
+    // 遍历所有股票统计数据
+    Object.entries(stockData).forEach(([key, stock]) => {
+      const [market] = key.split('-')
+      const stockCode = key.split('-')[1]
+      
+      // 如果有筛选条件且当前股票不在筛选范围内,则跳过
+      if (filterCodes.length > 0 && !filterCodes.includes(stockCode)) {
+        return
+      }
+      
+      // 初始化市场统计
+      if (!stats[market]) {
+        stats[market] = {
+          transaction_count: 0,
           total_buy: 0,
           total_sell: 0,
           total_fees: 0,
@@ -505,121 +503,156 @@ const marketStats = computed(() => {
           market_value: 0,
           holding_profit: 0,
           total_profit: 0,
-          profit_rate: 0
-        },
-        closed_stats: {
-          count: 0,
-          total_buy: 0,
-          total_sell: 0,
-          total_fees: 0,
-          realized_profit: 0,
-          profit_rate: 0
+          profit_rate: 0,
+          holding_stats: {
+            count: 0,
+            total_buy: 0,
+            total_sell: 0,
+            total_fees: 0,
+            realized_profit: 0,
+            market_value: 0,
+            holding_profit: 0,
+            total_profit: 0,
+            profit_rate: 0
+          },
+          closed_stats: {
+            count: 0,
+            total_buy: 0,
+            total_sell: 0,
+            total_fees: 0,
+            realized_profit: 0,
+            profit_rate: 0
+          }
         }
       }
-    }
 
-    // 更新市场统计
-    stats[market].transaction_count += stock.transaction_count || 0
-    stats[market].total_buy += stock.total_buy || 0
-    stats[market].total_sell += stock.total_sell || 0
-    stats[market].total_fees += stock.total_fees || 0
-    stats[market].realized_profit += stock.realized_profit || 0
-    stats[market].market_value += stock.market_value || 0
-    stats[market].holding_profit += stock.holding_profit || 0
-    
-    if (stock.current_quantity > 0) {
-      // 持仓股票统计
-      stats[market].holding_stats.count++
-      stats[market].holding_stats.total_buy += stock.total_buy || 0
-      stats[market].holding_stats.total_sell += stock.total_sell || 0
-      stats[market].holding_stats.total_fees += stock.total_fees || 0
-      stats[market].holding_stats.realized_profit += stock.realized_profit || 0
-      stats[market].holding_stats.market_value += stock.market_value || 0
-      stats[market].holding_stats.holding_profit += stock.holding_profit || 0
-    } else {
-      // 已清仓股票统计
-      stats[market].closed_stats.count++
-      stats[market].closed_stats.total_buy += stock.total_buy || 0
-      stats[market].closed_stats.total_sell += stock.total_sell || 0
-      stats[market].closed_stats.total_fees += stock.total_fees || 0
-      stats[market].closed_stats.realized_profit += stock.realized_profit || 0
-    }
-  })
-
-  // 计算各项汇总数据
-  Object.values(stats).forEach(market => {
-    // 持仓统计盈亏
-    market.holding_stats.total_profit = 
-      market.holding_stats.realized_profit + 
-      market.holding_stats.holding_profit
-
-    // 持仓统计盈亏率
-    market.holding_stats.profit_rate = 
-      market.holding_stats.total_buy > 0 
-        ? (market.holding_stats.total_profit / market.holding_stats.total_buy * 100)
-        : 0
-
-    // 已清仓统计盈亏率
-    market.closed_stats.profit_rate = 
-      market.closed_stats.total_buy > 0
-        ? (market.closed_stats.realized_profit / market.closed_stats.total_buy * 100)
-        : 0
-
-    // 市场总计
-    market.total_profit = 
-      market.realized_profit + 
-      market.holding_profit
-
-    // 市场总盈亏率
-    market.profit_rate = 
-      market.total_buy > 0 
-        ? (market.total_profit / market.total_buy * 100) 
-        : 0
-  })
-
-  return stats
-})
-
-// 获取市场持仓股票
-const getHoldingStocks = (market) => {
-  return Object.entries(stockStats.value)
-    .filter(([key, stock]) => {
-      const [stockMarket] = key.split('-')
-      const stockCode = key.split('-')[1]
+      // 更新市场统计
+      stats[market].transaction_count += stock.transaction_count || 0
+      stats[market].total_buy += stock.total_buy || 0
+      stats[market].total_sell += stock.total_sell || 0
+      stats[market].total_fees += stock.total_fees || 0
+      stats[market].realized_profit += stock.realized_profit || 0
+      stats[market].market_value += stock.market_value || 0
+      stats[market].holding_profit += stock.holding_profit || 0
       
-      if (searchForm.stockCodes?.length > 0) {
-        return stockMarket === market && 
-               stock.current_quantity > 0 && 
-               searchForm.stockCodes.includes(stockCode)
+      if (stock.current_quantity > 0) {
+        // 持仓股票统计
+        stats[market].holding_stats.count++
+        stats[market].holding_stats.total_buy += stock.total_buy || 0
+        stats[market].holding_stats.total_sell += stock.total_sell || 0
+        stats[market].holding_stats.total_fees += stock.total_fees || 0
+        stats[market].holding_stats.realized_profit += stock.realized_profit || 0
+        stats[market].holding_stats.market_value += stock.market_value || 0
+        stats[market].holding_stats.holding_profit += stock.holding_profit || 0
+      } else {
+        // 已清仓股票统计
+        stats[market].closed_stats.count++
+        stats[market].closed_stats.total_buy += stock.total_buy || 0
+        stats[market].closed_stats.total_sell += stock.total_sell || 0
+        stats[market].closed_stats.total_fees += stock.total_fees || 0
+        stats[market].closed_stats.realized_profit += stock.realized_profit || 0
       }
-      return stockMarket === market && stock.current_quantity > 0
     })
-    .map(([key, stock]) => ({
-      code: key.split('-')[1],
-      ...stock
-    }))
-    .sort((a, b) => b.total_buy - a.total_buy)
+
+    // 计算各项汇总数据
+    Object.values(stats).forEach(market => {
+      // 持仓统计盈亏
+      market.holding_stats.total_profit = 
+        (market.holding_stats.realized_profit || 0) + 
+        (market.holding_stats.holding_profit || 0)
+
+      // 持仓统计盈亏率
+      market.holding_stats.profit_rate = 
+        market.holding_stats.total_buy > 0 
+          ? ((market.holding_stats.total_profit || 0) / market.holding_stats.total_buy * 100)
+          : 0
+
+      // 已清仓统计盈亏率
+      market.closed_stats.profit_rate = 
+        market.closed_stats.total_buy > 0
+          ? ((market.closed_stats.realized_profit || 0) / market.closed_stats.total_buy * 100)
+          : 0
+
+      // 市场总计
+      market.total_profit = 
+        (market.realized_profit || 0) + 
+        (market.holding_profit || 0)
+
+      // 市场总盈亏率
+      market.profit_rate = 
+        market.total_buy > 0 
+          ? (market.total_profit / market.total_buy * 100) 
+          : 0
+    })
+
+    return stats
+  }
+
+  // 获取持仓股票列表
+  const getHoldingStocks = (stockData, market, filterCodes = []) => {
+    return Object.entries(stockData)
+      .filter(([key, stock]) => {
+        const [stockMarket] = key.split('-')
+        const stockCode = key.split('-')[1]
+        
+        if (filterCodes.length > 0) {
+          return stockMarket === market && 
+                 stock.current_quantity > 0 && 
+                 filterCodes.includes(stockCode)
+        }
+        return stockMarket === market && stock.current_quantity > 0
+      })
+      .map(([key, stock]) => ({
+        code: key.split('-')[1],
+        ...stock
+      }))
+      .sort((a, b) => b.total_buy - a.total_buy)
+  }
+
+  // 获取已清仓股票列表
+  const getClosedStocks = (stockData, market, filterCodes = []) => {
+    return Object.entries(stockData)
+      .filter(([key, stock]) => {
+        const [stockMarket] = key.split('-')
+        const stockCode = key.split('-')[1]
+        
+        if (filterCodes.length > 0) {
+          return stockMarket === market && 
+                 stock.current_quantity <= 0 && 
+                 filterCodes.includes(stockCode)
+        }
+        return stockMarket === market && stock.current_quantity <= 0
+      })
+      .map(([key, stock]) => ({
+        code: key.split('-')[1],
+        ...stock
+      }))
+      .sort((a, b) => b.realized_profit - a.realized_profit)
+  }
+
+  return {
+    calculateMarketStats,
+    getHoldingStocks,
+    getClosedStocks
+  }
 }
 
-// 获取市场已清仓股票
+// 创建统计计算器实例
+const statsCalculator = useStatsCalculator()
+
+// 修改 marketStats 计算属性
+const marketStats = computed(() => {
+  return statsCalculator.calculateMarketStats(stockStats.value, searchForm.stockCodes || [])
+})
+
+// 修改获取持仓股票函数
+const getHoldingStocks = (market) => {
+  return statsCalculator.getHoldingStocks(stockStats.value, market, searchForm.stockCodes || [])
+}
+
+// 修改获取已清仓股票函数
 const getClosedStocks = (market) => {
-  return Object.entries(stockStats.value)
-    .filter(([key, stock]) => {
-      const [stockMarket] = key.split('-')
-      const stockCode = key.split('-')[1]
-      
-      if (searchForm.stockCodes?.length > 0) {
-        return stockMarket === market && 
-               stock.current_quantity <= 0 && 
-               searchForm.stockCodes.includes(stockCode)
-      }
-      return stockMarket === market && stock.current_quantity <= 0
-    })
-    .map(([key, stock]) => ({
-      code: key.split('-')[1],
-      ...stock
-    }))
-    .sort((a, b) => b.realized_profit - a.realized_profit)
+  return statsCalculator.getClosedStocks(stockStats.value, market, searchForm.stockCodes || [])
 }
 
 // 获取市场列表（按名称排序）
@@ -754,11 +787,11 @@ const search = async () => {
     if (searchForm.startDate) params.start_date = searchForm.startDate
     if (searchForm.endDate) params.end_date = searchForm.endDate
     if (searchForm.market) params.market = searchForm.market
+    if (searchForm.stockCodes?.length > 0) params.stock_codes = searchForm.stockCodes
     
     const response = await axios.get('/api/profit/', { params })
     
     if (response.data.success) {
-      marketStats.value = response.data.data.market_stats || {}
       stockStats.value = response.data.data.stock_stats || {}
       transactionDetails.value = response.data.data.transaction_details || {}
       
