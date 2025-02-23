@@ -763,30 +763,25 @@ const search = async () => {
       stockStats.value = response.data.data.stock_stats || {}
       transactionDetails.value = response.data.data.transaction_details || {}
       
-      // 只展开包含查询股票的市场
+      // 清除所有展开状态
       expandedMarkets.value.clear()
       expandedHoldingGroups.value.clear()
       expandedClosedGroups.value.clear()
       expandedStocks.value.clear()
       
+      // 默认展开所有市场和持仓股票组
+      Object.keys(marketStats.value).forEach(market => {
+        expandedMarkets.value.add(market)
+        expandedHoldingGroups.value.add(market)
+      })
+      
+      // 如果有选择特定股票，则展开对应的股票明细
       if (searchForm.stockCodes && searchForm.stockCodes.length > 0) {
         Object.entries(stockStats.value).forEach(([key, stock]) => {
           const [market, code] = key.split('-')
           if (searchForm.stockCodes.includes(code)) {
-            expandedMarkets.value.add(market)
-            if (stock.current_quantity > 0) {
-              expandedHoldingGroups.value.add(market)
-            } else {
-              expandedClosedGroups.value.add(market)
-            }
             expandedStocks.value.add(key)
           }
-        })
-      } else {
-        // 如果没有选择股票，则展开所有市场
-        Object.keys(marketStats.value).forEach(market => {
-          expandedMarkets.value.add(market)
-          expandedHoldingGroups.value.add(market)
         })
       }
     }

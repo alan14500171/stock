@@ -21,14 +21,16 @@ def process_transactions(transactions):
     # 按日期排序交易记录
     transactions.sort(key=lambda x: x['transaction_date'])
     
+    # 按股票分组处理交易记录
+    stock_groups = {}
     for transaction in transactions:
         market = transaction['market']
-        stock_code = f"{market}-{transaction['stock_code']}"
-        transaction_type = transaction['transaction_type']
-        total_amount = float(transaction['total_amount'])
-        total_fees = float(transaction['total_fees'])
-        total_quantity = float(transaction['total_quantity'])
-        prev_avg_cost = float(transaction['prev_avg_cost']) if transaction['prev_avg_cost'] else 0
+        stock_code = transaction['stock_code']
+        stock_key = f"{market}-{stock_code}"
+        
+        if stock_key not in stock_groups:
+            stock_groups[stock_key] = []
+        stock_groups[stock_key].append(transaction)
         
         # 初始化市场统计
         if market not in market_stats:
@@ -38,6 +40,7 @@ def process_transactions(transactions):
                 'total_sell': 0,
                 'total_fees': 0,
                 'realized_profit': 0,
+                'market_value': 0,
                 'holding_profit': 0,
                 'total_profit': 0,
                 'profit_rate': 0,
@@ -47,6 +50,7 @@ def process_transactions(transactions):
                     'total_sell': 0,
                     'total_fees': 0,
                     'realized_profit': 0,
+                    'market_value': 0,
                     'holding_profit': 0,
                     'total_profit': 0,
                     'profit_rate': 0
@@ -60,84 +64,136 @@ def process_transactions(transactions):
                     'profit_rate': 0
                 }
             }
-
+    
+    # 处理每个股票的统计数据
+    for stock_key, stock_transactions in stock_groups.items():
+        market = stock_transactions[0]['market']
+        stock_code = stock_transactions[0]['stock_code']
+        stock_name = stock_transactions[0]['stock_name']
+        current_price = float(stock_transactions[0]['last_buy_price'] or 0)
+        
         # 初始化股票统计
-        if stock_code not in stock_stats:
-            stock_stats[stock_code] = {
-                'market': market,
-                'stock_code': transaction['stock_code'],
-                'stock_name': transaction['stock_name'],
-                'current_quantity': 0,
-                'total_buy': 0,
-                'total_sell': 0,
-                'total_fees': 0,
-                'realized_profit': 0,
-                'holding_profit': 0,
-                'total_profit': 0,
-                'profit_rate': 0,
-                'transaction_count': 0
-            }
-            transaction_details[stock_code] = []
-
-        # 更新统计数据
-        market_stats[market]['transaction_count'] += 1
-        stock_stats[stock_code]['transaction_count'] += 1
+        stock_stats[stock_key] = {
+            'market': market,
+            'stock_code': stock_code,
+            'stock_name': stock_name,
+            'current_quantity': 0,
+            'transaction_count': len(stock_transactions),
+            'total_buy': 0,
+            'total_sell': 0,
+            'total_fees': 0,
+            'realized_profit': 0,
+            'current_price': current_price,
+            'market_value': 0,
+            'holding_profit': 0,
+            'total_profit': 0,
+            'profit_rate': 0,
+            'average_cost': 0
+        }
         
-        if transaction_type == 'BUY':
-            stock_stats[stock_code]['total_buy'] += total_amount
-            stock_stats[stock_code]['current_quantity'] += total_quantity
-            market_stats[market]['total_buy'] += total_amount
-            market_stats[market]['holding_stats']['total_buy'] += total_amount
-        else:  # SELL
-            stock_stats[stock_code]['total_sell'] += total_amount
-            stock_stats[stock_code]['current_quantity'] -= total_quantity
-            realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
-            stock_stats[stock_code]['realized_profit'] += realized_profit
-            market_stats[market]['realized_profit'] += realized_profit
-            market_stats[market]['total_sell'] += total_amount
-            market_stats[market]['holding_stats']['total_sell'] += total_amount
-            market_stats[market]['holding_stats']['realized_profit'] += realized_profit
-
-        # 更新手续费
-        stock_stats[stock_code]['total_fees'] += total_fees
-        market_stats[market]['total_fees'] += total_fees
-        market_stats[market]['holding_stats']['total_fees'] += total_fees
-
-        # 添加交易记录
-        transaction_details[stock_code].append(transaction)
-
-    # 处理持仓和已清仓分类
-    for stock_code, stock in stock_stats.items():
-        market = stock['market']
+        # 初始化交易明细
+        transaction_details[stock_key] = []
         
-        # 计算盈亏率
-        if stock['total_buy'] > 0:
-            stock['profit_rate'] = round(stock['realized_profit'] / stock['total_buy'] * 100, 2)
+        # 计算股票统计数据
+        for trans in stock_transactions:
+            total_amount = float(trans['total_amount'] or 0)
+            total_quantity = float(trans['total_quantity'] or 0)
+            total_fees = float(trans['total_fees'] or 0)
+            prev_avg_cost = float(trans['prev_avg_cost'] or 0)
             
-        if stock['current_quantity'] > 0:
+            if trans['transaction_type'] == 'BUY':
+                stock_stats[stock_key]['current_quantity'] += total_quantity
+                stock_stats[stock_key]['total_buy'] += total_amount
+            else:  # SELL
+                stock_stats[stock_key]['current_quantity'] -= total_quantity
+                stock_stats[stock_key]['total_sell'] += total_amount
+                # 计算已实现盈亏
+                realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
+                stock_stats[stock_key]['realized_profit'] += realized_profit
+            
+            stock_stats[stock_key]['total_fees'] += total_fees
+            transaction_details[stock_key].append(trans)
+        
+        # 计算持仓市值和持仓盈亏
+        current_quantity = stock_stats[stock_key]['current_quantity']
+        if current_quantity > 0:
+            # 计算平均成本
+            stock_stats[stock_key]['average_cost'] = (
+                stock_stats[stock_key]['total_buy'] - 
+                stock_stats[stock_key]['total_sell']
+            ) / current_quantity
+            
+            # 计算市值
+            market_value = current_quantity * current_price
+            stock_stats[stock_key]['market_value'] = market_value
+            
+            # 计算持仓盈亏
+            holding_cost = current_quantity * stock_stats[stock_key]['average_cost']
+            stock_stats[stock_key]['holding_profit'] = market_value - holding_cost
+        
+        # 计算总盈亏和盈亏率
+        stock_stats[stock_key]['total_profit'] = (
+            stock_stats[stock_key]['realized_profit'] + 
+            stock_stats[stock_key]['holding_profit']
+        )
+        
+        if stock_stats[stock_key]['total_buy'] > 0:
+            stock_stats[stock_key]['profit_rate'] = (
+                stock_stats[stock_key]['total_profit'] / 
+                stock_stats[stock_key]['total_buy'] * 100
+            )
+        
+        # 更新市场统计
+        market_stats[market]['transaction_count'] += stock_stats[stock_key]['transaction_count']
+        market_stats[market]['total_buy'] += stock_stats[stock_key]['total_buy']
+        market_stats[market]['total_sell'] += stock_stats[stock_key]['total_sell']
+        market_stats[market]['total_fees'] += stock_stats[stock_key]['total_fees']
+        market_stats[market]['realized_profit'] += stock_stats[stock_key]['realized_profit']
+        
+        if current_quantity > 0:
+            # 持仓统计
             market_stats[market]['holding_stats']['count'] += 1
-        else:
-            # 移动到已清仓统计
-            market_stats[market]['closed_stats']['count'] += 1
-            market_stats[market]['closed_stats']['total_buy'] += stock['total_buy']
-            market_stats[market]['closed_stats']['total_sell'] += stock['total_sell']
-            market_stats[market]['closed_stats']['total_fees'] += stock['total_fees']
-            market_stats[market]['closed_stats']['realized_profit'] += stock['realized_profit']
+            market_stats[market]['holding_stats']['total_buy'] += stock_stats[stock_key]['total_buy']
+            market_stats[market]['holding_stats']['total_sell'] += stock_stats[stock_key]['total_sell']
+            market_stats[market]['holding_stats']['total_fees'] += stock_stats[stock_key]['total_fees']
+            market_stats[market]['holding_stats']['realized_profit'] += stock_stats[stock_key]['realized_profit']
+            market_stats[market]['holding_stats']['market_value'] += stock_stats[stock_key]['market_value']
+            market_stats[market]['holding_stats']['holding_profit'] += stock_stats[stock_key]['holding_profit']
             
-            # 从持仓统计中减去
-            market_stats[market]['holding_stats']['total_buy'] -= stock['total_buy']
-            market_stats[market]['holding_stats']['total_sell'] -= stock['total_sell']
-            market_stats[market]['holding_stats']['total_fees'] -= stock['total_fees']
-            market_stats[market]['holding_stats']['realized_profit'] -= stock['realized_profit']
-
-    # 计算市场级别的盈亏率
+            # 更新市场总计
+            market_stats[market]['market_value'] += stock_stats[stock_key]['market_value']
+            market_stats[market]['holding_profit'] += stock_stats[stock_key]['holding_profit']
+        else:
+            # 已清仓统计
+            market_stats[market]['closed_stats']['count'] += 1
+            market_stats[market]['closed_stats']['total_buy'] += stock_stats[stock_key]['total_buy']
+            market_stats[market]['closed_stats']['total_sell'] += stock_stats[stock_key]['total_sell']
+            market_stats[market]['closed_stats']['total_fees'] += stock_stats[stock_key]['total_fees']
+            market_stats[market]['closed_stats']['realized_profit'] += stock_stats[stock_key]['realized_profit']
+    
+    # 计算市场级别的汇总数据
     for market in market_stats:
+        # 计算持仓统计的总盈亏和盈亏率
+        holding_stats = market_stats[market]['holding_stats']
+        holding_stats['total_profit'] = holding_stats['realized_profit'] + holding_stats['holding_profit']
+        if holding_stats['total_buy'] > 0:
+            holding_stats['profit_rate'] = (holding_stats['total_profit'] / holding_stats['total_buy']) * 100
+        
+        # 计算已清仓统计的盈亏率
+        closed_stats = market_stats[market]['closed_stats']
+        if closed_stats['total_buy'] > 0:
+            closed_stats['profit_rate'] = (closed_stats['realized_profit'] / closed_stats['total_buy']) * 100
+        
+        # 计算市场总计的总盈亏和盈亏率
+        market_stats[market]['total_profit'] = (
+            market_stats[market]['realized_profit'] + 
+            market_stats[market]['holding_profit']
+        )
         if market_stats[market]['total_buy'] > 0:
-            market_stats[market]['profit_rate'] = round(market_stats[market]['realized_profit'] / market_stats[market]['total_buy'] * 100, 2)
-        if market_stats[market]['holding_stats']['total_buy'] > 0:
-            market_stats[market]['holding_stats']['profit_rate'] = round(market_stats[market]['holding_stats']['realized_profit'] / market_stats[market]['holding_stats']['total_buy'] * 100, 2)
-        if market_stats[market]['closed_stats']['total_buy'] > 0:
-            market_stats[market]['closed_stats']['profit_rate'] = round(market_stats[market]['closed_stats']['realized_profit'] / market_stats[market]['closed_stats']['total_buy'] * 100, 2)
+            market_stats[market]['profit_rate'] = (
+                market_stats[market]['total_profit'] / 
+                market_stats[market]['total_buy']
+            ) * 100
 
     return market_stats, stock_stats, transaction_details
 
