@@ -206,7 +206,7 @@
                         </button>
                     </td>
                       <td>{{ stock.code }} <br> <small class="text-muted">{{ stock.name }}</small></td>
-                    <td class="text-end">{{ stock.quantity || '-' }}</td>
+                    <td class="text-end">{{ formatNumber(stock.current_quantity, 0) }}</td>
                     <td class="text-end">{{ stock.transaction_count }}</td>
                     <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
                     <td class="text-end">{{ formatNumber(stock.average_cost, 3) }}</td>
