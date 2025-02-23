@@ -88,7 +88,8 @@ def process_transactions(transactions):
             'holding_profit': 0,
             'total_profit': 0,
             'profit_rate': 0,
-            'average_cost': 0
+            'average_cost': 0,
+            'last_transaction_date': stock_transactions[0]['transaction_date']
         }
         
         # 初始化交易明细
@@ -169,7 +170,28 @@ def process_transactions(transactions):
             market_stats[market]['closed_stats']['total_sell'] += stock_stats[stock_key]['total_sell']
             market_stats[market]['closed_stats']['total_fees'] += stock_stats[stock_key]['total_fees']
             market_stats[market]['closed_stats']['realized_profit'] += stock_stats[stock_key]['realized_profit']
-    
+        
+        # 获取每只股票的最后交易日期
+        stock_last_dates = {}
+        for stock_key, transactions in transaction_details.items():
+            if transactions:
+                # 按交易日期降序排序
+                sorted_trans = sorted(transactions, key=lambda x: (x['transaction_date'], x['id']), reverse=True)
+                stock_last_dates[stock_key] = sorted_trans[0]['transaction_date']
+                # 将最后交易日期添加到 stock_stats 中
+                stock_stats[stock_key]['last_transaction_date'] = sorted_trans[0]['transaction_date']
+        
+        # 对stock_stats进行排序
+        sorted_stock_stats = {}
+        for market in market_stats:
+            market_stocks = {k: v for k, v in stock_stats.items() if v['market'] == market}
+            # 按最后交易日期降序排序
+            sorted_stocks = sorted(market_stocks.items(), 
+                                 key=lambda x: stock_last_dates.get(x[0], ''), 
+                                 reverse=True)
+            for stock_key, stock_stat in sorted_stocks:
+                sorted_stock_stats[stock_key] = stock_stat
+
     # 计算市场级别的汇总数据
     for market in market_stats:
         # 计算持仓统计的总盈亏和盈亏率
@@ -194,7 +216,7 @@ def process_transactions(transactions):
                 market_stats[market]['total_buy']
             ) * 100
 
-    return market_stats, stock_stats, transaction_details
+    return market_stats, sorted_stock_stats, transaction_details
 
 @profit_bp.route('/')
 @login_required
@@ -225,6 +247,15 @@ def get_profit_stats():
 
         # 3. 获取交易明细数据
         sql = f"""
+            WITH last_transaction_dates AS (
+                SELECT 
+                    market,
+                    stock_code,
+                    MAX(transaction_date) as last_transaction_date
+                FROM stock.stock_transactions
+                WHERE user_id = %s
+                GROUP BY market, stock_code
+            )
             SELECT 
                 t.id,
                 t.market,
@@ -243,14 +274,18 @@ def get_profit_stats():
                 t.prev_avg_cost,
                 t.current_avg_cost,
                 (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                t.created_at
+                t.created_at,
+                ltd.last_transaction_date
             FROM stock.stock_transactions t
             LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
+            LEFT JOIN last_transaction_dates ltd ON t.market = ltd.market AND t.stock_code = ltd.stock_code
             WHERE {where_clause}
-            ORDER BY t.transaction_date DESC, t.id DESC
+            ORDER BY ltd.last_transaction_date DESC, t.transaction_date DESC, t.id DESC
         """
 
-        transactions = db.fetch_all(sql, params)
+        # 在参数列表开头添加user_id参数
+        all_params = [user_id] + params
+        transactions = db.fetch_all(sql, all_params)
 
         # 4. 处理数据
         market_stats, stock_stats, transaction_details = process_transactions(transactions)

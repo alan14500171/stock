@@ -609,7 +609,12 @@ const useStatsCalculator = () => {
         code: key.split('-')[1],
         ...stock
       }))
-      .sort((a, b) => b.total_buy - a.total_buy)
+      .sort((a, b) => {
+        // 使用最后交易日期进行排序
+        const dateA = new Date(a.last_transaction_date || 0)
+        const dateB = new Date(b.last_transaction_date || 0)
+        return dateB - dateA
+      })
   }
 
   // 获取已清仓股票列表
@@ -630,7 +635,12 @@ const useStatsCalculator = () => {
         code: key.split('-')[1],
         ...stock
       }))
-      .sort((a, b) => b.realized_profit - a.realized_profit)
+      .sort((a, b) => {
+        // 使用最后交易日期进行排序
+        const dateA = new Date(a.last_transaction_date || 0)
+        const dateB = new Date(b.last_transaction_date || 0)
+        return dateB - dateA
+      })
   }
 
   return {
