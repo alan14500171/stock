@@ -1,274 +1,239 @@
 <template>
   <div class="card">
     <div class="card-header">
-      <h5 class="mb-0">{{ isEdit ? '编辑交易记录' : '添加交易记录' }}</h5>
+      <h5 class="mb-0">添加交易记录</h5>
     </div>
     
     <div class="card-body">
-      <form @submit.prevent="submitForm">
-        <!-- 基本信息 -->
-        <div class="row mb-4">
-          <div class="col-md-4">
-            <label class="form-label">交易日期</label>
-            <div class="date-input">
-              <input
-                type="text"
-                class="form-control"
-                :value="dateDisplayValue"
-                @input="handleDateInput"
-                @blur="handleDateBlur"
-                @keydown.enter="focusNext($event, 'stock_code')"
-                :class="{ 'is-invalid': errors.transaction_date }"
-                placeholder="YYYY-MM-DD"
-                ref="transaction_date"
-              />
-              <div class="invalid-feedback">{{ errors.transaction_date }}</div>
-            </div>
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label">股票代码</label>
-            <stock-selector
-              v-model="form.stock_code"
-              :class="{ 'is-invalid': errors.stock_code }"
-              ref="stock_code"
-              placeholder="输入代码或名称搜索"
-              @enter="focusNext($event, 'transaction_code')"
-            />
-            <div class="invalid-feedback">{{ errors.stock_code }}</div>
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label">交易编号</label>
+      <!-- 基本信息 -->
+      <div class="row mb-4">
+        <div class="col-md-4">
+          <label class="form-label">交易日期</label>
+          <div class="date-input">
             <input
               type="text"
               class="form-control"
-              v-model="form.transaction_code"
-              :class="{ 'is-invalid': errors.transaction_code }"
-              ref="transaction_code"
-              @input="handleTransactionCodeInput"
-              @keydown.enter="focusNext($event, 'transaction_type')"
+              v-model="form.transaction_date"
+              :ref="el => inputRefs.transaction_date.value = el"
+              @blur="handleDateBlur"
+              @keydown="handleKeyNavigation($event, 'transaction_date')"
+              :class="{ 'is-invalid': errors.transaction_date }"
+              placeholder="YYYY-MM-DD"
             />
-            <div class="invalid-feedback">{{ errors.transaction_code }}</div>
+            <div class="invalid-feedback">{{ errors.transaction_date }}</div>
           </div>
         </div>
 
-        <div class="row mb-4">
-          <div class="col-md-4">
-            <label class="form-label">买卖</label>
-            <select
-              class="form-select"
-              v-model="form.transaction_type"
-              :class="{ 'is-invalid': errors.transaction_type }"
-              ref="transaction_type"
-              @keydown.enter="focusNext($event, 'quantity_0')"
-            >
-              <option value="">请选择类型</option>
-              <option value="buy">买入</option>
-              <option value="sell">卖出</option>
-            </select>
-            <div class="invalid-feedback">{{ errors.transaction_type }}</div>
-          </div>
+        <div class="col-md-4">
+          <label class="form-label">股票代码</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="form.stock_code"
+            :ref="el => inputRefs.stock_code.value = el"
+            @input="handleStockCodeInput"
+            @keydown="handleKeyNavigation($event, 'stock_code')"
+            :class="{ 'is-invalid': errors.stock_code }"
+            placeholder="输入代码或名称搜索"
+          />
+          <div class="invalid-feedback">{{ errors.stock_code }}</div>
         </div>
 
-        <!-- 成交明细 -->
-        <div class="mb-4">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <label class="form-label mb-0">成交明细</label>
-            <button 
-              type="button" 
-              class="btn btn-sm btn-outline-primary" 
-              @click="addDetail"
-              ref="addDetailBtn"
-            >
-              添加成交记录
-            </button>
-          </div>
+        <div class="col-md-4">
+          <label class="form-label">交易编号</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="form.transaction_code"
+            :ref="el => inputRefs.transaction_code.value = el"
+            @input="handleTransactionCodeInput"
+            @keydown="handleKeyNavigation($event, 'transaction_code')"
+            :class="{ 'is-invalid': errors.transaction_code }"
+          />
+          <div class="invalid-feedback">{{ errors.transaction_code }}</div>
+        </div>
+      </div>
 
-          <div class="border rounded p-3">
-            <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2">
-              <div class="col-md-5">
-                <div class="input-group">
-                  <span class="input-group-text">数量</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="detail.quantity"
-                    :ref="`quantity_${index}`"
-                    @keydown.enter="focusNext($event, `price_${index}`)"
-                  />
-                </div>
-              </div>
+      <div class="row mb-4">
+        <div class="col-md-4">
+          <label class="form-label">交易类型</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="form.transaction_type"
+            :ref="el => inputRefs.transaction_type.value = el"
+            @keydown="handleKeyNavigation($event, 'transaction_type')"
+            :class="{ 'is-invalid': errors.transaction_type }"
+            placeholder="P-买入 S-卖出"
+          />
+          <div class="invalid-feedback">{{ errors.transaction_type }}</div>
+        </div>
+      </div>
 
-              <div class="col-md-5">
-                <div class="input-group">
-                  <span class="input-group-text">价格</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="detail.price"
-                    min="0"
-                    step="0.001"
-                    :class="{ 'is-invalid': errors[`price_${index}`] }"
-                    :ref="`price_${index}`"
-                    @keydown.enter="handlePriceEnter($event, index)"
-                    @keydown.tab="focusNext($event, 'addDetailBtn')"
-                  />
-                  <div class="invalid-feedback">{{ errors[`price_${index}`] }}</div>
-                </div>
-              </div>
+      <!-- 成交明细 -->
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <label class="form-label mb-0">成交明细</label>
+          <button 
+            type="button" 
+            class="btn btn-sm btn-outline-primary" 
+            @click="addDetail"
+            :ref="el => inputRefs.addDetailBtn.value = el"
+          >
+            添加成交记录
+          </button>
+        </div>
 
-              <div class="col-md-2">
-                <button
-                  type="button"
-                  class="btn btn-outline-danger"
-                  @click="removeDetail(index)"
-                  :disabled="form.details.length === 1"
-                >
-                  删除
-                </button>
-              </div>
+        <div class="border rounded p-3">
+          <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2">
+            <div class="col-md-5">
+              <label class="form-label">数量</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="detail.quantity"
+                :ref="el => setQuantityRef(el, index)"
+                @keydown="handleKeyNavigation($event, `quantity_${index}`)"
+              />
+            </div>
+
+            <div class="col-md-5">
+              <label class="form-label">价格</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="detail.price"
+                :ref="el => setPriceRef(el, index)"
+                @keydown="handleKeyNavigation($event, `price_${index}`)"
+                :class="{ 'is-invalid': errors[`price_${index}`] }"
+              />
+              <div class="invalid-feedback">{{ errors[`price_${index}`] }}</div>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+              <button
+                type="button"
+                class="btn btn-outline-danger w-100"
+                @click="removeDetail(index)"
+                :disabled="form.details.length === 1"
+              >
+                删除
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- 费用明细 -->
-        <div class="mb-4">
-          <label class="form-label">费用明细</label>
-          <div class="border rounded p-3">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">经纪佣金</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.broker_fee"
-                    min="0"
-                    step="0.01"
-                    ref="broker_fee"
-                    @keydown.enter="focusNext($event, 'transaction_levy')"
-                    @keydown.tab="focusNext($event, 'saveBtn')"
-                  />
-                </div>
-              </div>
+      <!-- 费用明细 -->
+      <div class="mb-4">
+        <label class="form-label">费用明细</label>
+        <div class="border rounded p-3">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">经纪佣金</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.broker_fee"
+                :ref="el => inputRefs.broker_fee.value = el"
+                @keydown="handleKeyNavigation($event, 'broker_fee')"
+              />
+            </div>
 
-              <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">交易征费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.transaction_levy"
-                    min="0"
-                    step="0.01"
-                    ref="transaction_levy"
-                    @keydown.enter="focusNext($event, 'stamp_duty')"
-                    @keydown.tab="focusNext($event, 'stamp_duty')"
-                  />
-                </div>
-              </div>
+            <div class="col-md-4">
+              <label class="form-label">交易征费</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.transaction_levy"
+                :ref="el => inputRefs.transaction_levy.value = el"
+                @keydown="handleKeyNavigation($event, 'transaction_levy')"
+              />
+            </div>
 
-              <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">印花税</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.stamp_duty"
-                    min="0"
-                    step="0.01"
-                    ref="stamp_duty"
-                    @keydown.enter="focusNext($event, 'trading_fee')"
-                    @keydown.tab="focusNext($event, 'trading_fee')"
-                  />
-                </div>
-              </div>
+            <div class="col-md-4">
+              <label class="form-label">印花税</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.stamp_duty"
+                :ref="el => inputRefs.stamp_duty.value = el"
+                @keydown="handleKeyNavigation($event, 'stamp_duty')"
+              />
+            </div>
 
-              <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">交易费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.trading_fee"
-                    min="0"
-                    step="0.01"
-                    ref="trading_fee"
-                    @keydown.enter="focusNext($event, 'deposit_fee')"
-                    @keydown.tab="focusNext($event, 'deposit_fee')"
-                  />
-                </div>
-              </div>
+            <div class="col-md-4">
+              <label class="form-label">交易费</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.trading_fee"
+                :ref="el => inputRefs.trading_fee.value = el"
+                @keydown="handleKeyNavigation($event, 'trading_fee')"
+              />
+            </div>
 
-              <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">存入证券费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.deposit_fee"
-                    min="0"
-                    step="0.01"
-                    ref="deposit_fee"
-                    @keydown.enter="saveAndAdd"
-                    @keydown.tab="focusNext($event, 'cancelBtn')"
-                  />
-                </div>
-              </div>
+            <div class="col-md-4">
+              <label class="form-label">存入证券费</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.deposit_fee"
+                :ref="el => inputRefs.deposit_fee.value = el"
+                @keydown="handleKeyNavigation($event, 'deposit_fee')"
+              />
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- 按钮组 -->
-        <div class="d-flex justify-content-end gap-2">
-          <button 
-            type="button" 
-            class="btn btn-secondary" 
-            @click="$router.back()"
-            ref="cancelBtn"
-          >
-            取消
-          </button>
-          <button 
-            type="submit" 
-            class="btn btn-primary" 
-            :disabled="submitting"
-            ref="saveBtn"
-          >
-            <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-            保存
-          </button>
-          <button 
-            type="button" 
-            class="btn btn-success" 
-            :disabled="submitting" 
-            @click="saveAndAdd"
-            ref="saveAndAddBtn"
-          >
-            <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-            保存并添加下一条
-          </button>
-        </div>
-      </form>
+      <!-- 按钮组 -->
+      <div class="d-flex justify-content-end gap-2">
+        <button 
+          type="button" 
+          class="btn btn-secondary" 
+          @click="$router.back()"
+          :ref="el => inputRefs.cancelBtn.value = el"
+        >
+          取消
+        </button>
+        <button 
+          type="button"
+          class="btn btn-primary" 
+          :disabled="submitting"
+          :ref="el => inputRefs.saveBtn.value = el"
+          @click="submitForm"
+        >
+          <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+          保存
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-success" 
+          :disabled="submitting" 
+          @click="saveAndAdd"
+          :ref="el => inputRefs.saveAndAddBtn.value = el"
+        >
+          <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+          保存并添加下一条
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDateInput } from '../composables/useDateInput'
 import StockSelector from '../components/StockSelector.vue'
 import axios from 'axios'
 import useMessage from '../composables/useMessage'
 
 const router = useRouter()
-const route = useRoute()
 const message = useMessage()
 const submitting = ref(false)
 const saveAndAddNext = ref(false)
-const isEdit = computed(() => route.params.id !== undefined)
 
 // 表单数据
 const form = ref({
@@ -278,35 +243,21 @@ const form = ref({
   transaction_code: '',
   transaction_type: '',
   details: [{ quantity: null, price: null }],
-  broker_fee: 0,
-  transaction_levy: 0,
-  stamp_duty: 0,
-  trading_fee: 0,
-  deposit_fee: 0
+  broker_fee:  '',
+  transaction_levy:  '',
+  stamp_duty:  '',
+  trading_fee:  '',
+  deposit_fee:  ''
 })
 
 // 错误信息
 const errors = ref({})
-
-// 计算属性
-const totalQuantity = computed(() => {
-  return form.value.details.reduce((sum, detail) => {
-    return sum + (Number(detail.quantity) || 0)
-  }, 0)
-})
-
-const totalAmount = computed(() => {
-  return form.value.details.reduce((sum, detail) => {
-    return sum + (Number(detail.quantity) || 0) * (Number(detail.price) || 0)
-  }, 0)
-})
 
 // 日期处理
 const { 
   displayValue: dateDisplayValue, 
   handleInput: handleDateInputChange,
   handleBlur: handleDateBlurChange,
-  setToday,
   validateDateString,
   isValid: dateIsValid
 } = useDateInput('', {
@@ -319,6 +270,25 @@ const {
   }
 })
 
+// 修改 refs 对象的定义方式
+const inputRefs = {
+  transaction_date: ref(null),
+  stock_code: ref(null),
+  transaction_code: ref(null),
+  transaction_type: ref(null),
+  broker_fee: ref(null),
+  transaction_levy: ref(null),
+  stamp_duty: ref(null),
+  trading_fee: ref(null),
+  deposit_fee: ref(null),
+  cancelBtn: ref(null),
+  saveBtn: ref(null),
+  saveAndAddBtn: ref(null),
+  addDetailBtn: ref(null),
+  quantityRefs: [],
+  priceRefs: []
+}
+
 // 方法
 const addDetail = () => {
   form.value.details.push({ quantity: null, price: null })
@@ -330,110 +300,61 @@ const removeDetail = (index) => {
   }
 }
 
-// TAB键焦点控制
-const focusNext = (event, nextRef) => {
-  event.preventDefault();
-  
-  const stockSelector = document.querySelector('.stock-selector input');
-  if (nextRef === 'stock_code' && stockSelector) {
-    stockSelector.focus();
-    return;
-  }
-  
-  const element = document.querySelector(`[ref="${nextRef}"]`);
-  if (element) {
-    if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-      element.focus();
-    } else {
-      const input = element.querySelector('input');
-      if (input) {
-        input.focus();
-      }
-    }
-  }
-}
-
-// 处理日期输入
+// 修改日期处理相关代码
 const handleDateInput = (event) => {
   const newValue = handleDateInputChange(event)
   form.value.transaction_date = newValue
 }
 
-// 处理日期失焦
 const handleDateBlur = () => {
   handleDateBlurChange()
 }
 
 // 表单验证
 const validateForm = () => {
-  try {
-    errors.value = {}
-    let isValid = true
+  errors.value = {}
+  let isValid = true
 
-    // 检查form对象是否存在
-    if (!form || !form.value) {
-      console.error('表单对象不存在')
-      return false
-    }
-
-    // 验证日期
-    if (!form.value.transaction_date) {
-      errors.value.transaction_date = '请输入交易日期'
-      isValid = false
-    } else if (dateIsValid && !dateIsValid.value) {
-      errors.value.transaction_date = '请输入有效的交易日期'
-      isValid = false
-    }
-
-    // 验证股票代码
-    if (!form.value.stock_code) {
-      errors.value.stock_code = '请选择股票'
-      isValid = false
-    }
-
-    // 验证交易编号
-    if (!form.value.transaction_code) {
-      errors.value.transaction_code = '请输入交易编号'
-      isValid = false
-    }
-
-    // 验证交易类型
-    if (!form.value.transaction_type) {
-      errors.value.transaction_type = '请选择交易类型'
-      isValid = false
-    }
-
-    // 验证明细
-    if (!form.value.details || !Array.isArray(form.value.details)) {
-      console.error('交易明细格式错误')
-      return false
-    }
-
-    form.value.details.forEach((detail, index) => {
-      if (!detail) {
-        errors.value[`detail_${index}`] = '明细数据无效'
-        isValid = false
-        return
-      }
-
-      // 验证价格
-      if (!detail.price || detail.price <= 0) {
-        errors.value[`price_${index}`] = '请输入有效的价格'
-        isValid = false
-      }
-    })
-
-    return isValid
-  } catch (error) {
-    console.error('表单验证出错:', error)
-    return false
+  // 验证日期
+  if (!form.value.transaction_date || !dateIsValid.value) {
+    errors.value.transaction_date = '请输入有效的交易日期'
+    isValid = false
   }
-}
 
-// 自动计算费用
-const calculateFees = () => {
-  // 移除自动计算功能
-  return
+  // 验证股票代码
+  if (!form.value.stock_code) {
+    errors.value.stock_code = '请选择股票'
+    isValid = false
+  }
+
+  // 验证交易编号
+  if (!form.value.transaction_code) {
+    errors.value.transaction_code = '请输入交易编号'
+    isValid = false
+  }
+
+  // 验证交易类型
+  if (!form.value.transaction_type) {
+    errors.value.transaction_type = '请选择交易类型'
+    isValid = false
+  }
+
+  // 验证明细
+  form.value.details.forEach((detail, index) => {
+    const price = parseFloat(detail.price)
+    if (isNaN(price) || price <= 0) {
+      errors.value[`price_${index}`] = '请输入有效的价格'
+      isValid = false
+    }
+    
+    const quantity = parseFloat(detail.quantity)
+    if (isNaN(quantity) || quantity <= 0) {
+      errors.value[`quantity_${index}`] = '请输入有效的数量'
+      isValid = false
+    }
+  })
+
+  return isValid
 }
 
 // 监听交易类型变化，但不自动计算印花税
@@ -456,54 +377,12 @@ const handleTransactionCodeInput = (event) => {
   }
 }
 
-// 处理价格输入框的回车事件
-const handlePriceEnter = (event, index) => {
-  event.preventDefault()
-  if (index === form.value.details.length - 1) {
-    focusNext(event, 'broker_fee')
-  } else {
-    focusNext(event, `quantity_${index + 1}`)
-  }
-}
-
-// 加载交易记录数据
-const loadTransaction = async () => {
-  if (!isEdit.value) return
-  
-  try {
-    const response = await axios.get(`/api/stock/transactions/${route.params.id}`)
-    if (response.data.success) {
-      const transaction = response.data.data
-      form.value = {
-        transaction_date: transaction.transaction_date,
-        stock_code: transaction.stock_code,
-        stock_name: transaction.stock_name,
-        transaction_code: transaction.transaction_code,
-        transaction_type: transaction.transaction_type.toLowerCase(),
-        details: transaction.details || [{ quantity: transaction.total_quantity, price: transaction.total_amount / transaction.total_quantity }],
-        broker_fee: transaction.broker_fee,
-        transaction_levy: transaction.transaction_levy,
-        stamp_duty: transaction.stamp_duty,
-        trading_fee: transaction.trading_fee,
-        deposit_fee: transaction.deposit_fee
-      }
-    }
-  } catch (error) {
-    console.error('加载交易记录失败:', error)
-  }
-}
-
 // 提交表单
 const submitForm = async () => {
   try {
     if (!validateForm() || submitting.value) return
 
     submitting.value = true
-    const url = isEdit.value 
-      ? `/api/stock/transactions/${route.params.id}`
-      : '/api/stock/transactions'
-      
-    const method = isEdit.value ? 'put' : 'post'
     
     const submitData = {
       transaction_date: form.value.transaction_date,
@@ -511,20 +390,20 @@ const submitForm = async () => {
       transaction_code: form.value.transaction_code,
       transaction_type: form.value.transaction_type.toUpperCase(),
       details: form.value.details.map(d => ({
-        quantity: Number(d.quantity),
-        price: Number(d.price)
+        quantity: parseFloat(d.quantity) || 0,
+        price: parseFloat(d.price) || 0
       })),
-      broker_fee: Number(form.value.broker_fee) || 0,
-      transaction_levy: Number(form.value.transaction_levy) || 0,
-      stamp_duty: Number(form.value.stamp_duty) || 0,
-      trading_fee: Number(form.value.trading_fee) || 0,
-      deposit_fee: Number(form.value.deposit_fee) || 0
+      broker_fee: parseFloat(form.value.broker_fee) || 0,
+      transaction_levy: parseFloat(form.value.transaction_levy) || 0,
+      stamp_duty: parseFloat(form.value.stamp_duty) || 0,
+      trading_fee: parseFloat(form.value.trading_fee) || 0,
+      deposit_fee: parseFloat(form.value.deposit_fee) || 0
     }
     
-    const response = await axios[method](url, submitData)
+    const response = await axios.post('/api/stock/transactions', submitData)
 
     if (response.data.success) {
-      message.success(isEdit.value ? '交易记录更新成功' : '交易记录添加成功')
+      message.success('交易记录添加成功')
       if (saveAndAddNext.value) {
         resetForm()
         saveAndAddNext.value = false
@@ -550,7 +429,7 @@ const saveAndAdd = () => {
 // 重置表单
 const resetForm = () => {
   form.value = {
-    transaction_date: setToday(),
+    transaction_date: '',
     stock_code: '',
     stock_name: '',
     transaction_code: '',
@@ -565,11 +444,178 @@ const resetForm = () => {
   errors.value = {}
 }
 
-// 组件挂载时设置默认日期和加载数据
+// 在组件挂载后检查所有ref
 onMounted(() => {
-  resetForm()
-  loadTransaction()
+  nextTick(() => {
+    console.log("检查所有输入框的 ref 是否绑定成功:", {
+      transaction_date: inputRefs.transaction_date.value,
+      stock_code: inputRefs.stock_code.value,
+      transaction_code: inputRefs.transaction_code.value,
+      transaction_type: inputRefs.transaction_type.value,
+      broker_fee: inputRefs.broker_fee.value,
+      transaction_levy: inputRefs.transaction_levy.value,
+      stamp_duty: inputRefs.stamp_duty.value,
+      trading_fee: inputRefs.trading_fee.value,
+      deposit_fee: inputRefs.deposit_fee.value,
+      cancelBtn: inputRefs.cancelBtn.value,
+      saveBtn: inputRefs.saveBtn.value,
+      saveAndAddBtn: inputRefs.saveAndAddBtn.value,
+      addDetailBtn: inputRefs.addDetailBtn.value,
+      quantityRefs: inputRefs.quantityRefs,
+      priceRefs: inputRefs.priceRefs,
+    });
+
+    // 检查动态数组的长度是否匹配
+    console.log("动态数组长度检查:", {
+      details_length: form.value.details.length,
+      quantityRefs_length: inputRefs.quantityRefs.length,
+      priceRefs_length: inputRefs.priceRefs.length,
+    });
+
+    // 检查所有可聚焦元素的顺序
+    const focusableElements = document.querySelectorAll(
+      'input:not([disabled]), button:not([disabled])'
+    );
+    console.log("可聚焦元素数量:", focusableElements.length);
+    
+    // 检查每个动态行的ref
+    form.value.details.forEach((_, index) => {
+      console.log(`第 ${index + 1} 行明细的ref:`, {
+        quantity: inputRefs.quantityRefs[index],
+        price: inputRefs.priceRefs[index],
+      });
+    });
+  });
+});
+
+// 修改动态ref的处理
+const setQuantityRef = (el, index) => {
+  if (el) {
+    // 确保数组长度足够
+    while (inputRefs.quantityRefs.length <= index) {
+      inputRefs.quantityRefs.push(null);
+    }
+    inputRefs.quantityRefs[index] = el;
+  }
+}
+
+const setPriceRef = (el, index) => {
+  if (el) {
+    // 确保数组长度足够
+    while (inputRefs.priceRefs.length <= index) {
+      inputRefs.priceRefs.push(null);
+    }
+    inputRefs.priceRefs[index] = el;
+  }
+}
+
+// 监听明细数量变化，更新refs数组
+watch(() => form.value.details.length, (newLength) => {
+  nextTick(() => {
+    // 重置refs数组并保持现有的引用
+    const newQuantityRefs = new Array(newLength).fill(null);
+    const newPriceRefs = new Array(newLength).fill(null);
+    
+    // 复制现有的引用
+    inputRefs.quantityRefs.forEach((ref, index) => {
+      if (index < newLength) {
+        newQuantityRefs[index] = ref;
+      }
+    });
+    
+    inputRefs.priceRefs.forEach((ref, index) => {
+      if (index < newLength) {
+        newPriceRefs[index] = ref;
+      }
+    });
+    
+    inputRefs.quantityRefs = newQuantityRefs;
+    inputRefs.priceRefs = newPriceRefs;
+  })
 })
+
+// 键盘导航处理
+const handleKeyNavigation = (event, fieldName) => {
+  // Enter键导航逻辑
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    console.log('Enter键导航 - 当前字段:', fieldName);
+
+    // 处理动态字段的导航
+    if (fieldName.startsWith('quantity_')) {
+      const index = parseInt(fieldName.split('_')[1]);
+      inputRefs.priceRefs[index]?.focus();
+      return;
+    }
+    
+    if (fieldName.startsWith('price_')) {
+      // 如果是最后一行的价格，跳转到经纪佣金
+      const index = parseInt(fieldName.split('_')[1]);
+      if (index === form.value.details.length - 1) {
+        inputRefs.broker_fee.value?.focus();
+      }
+      return;
+    }
+
+    // Enter键特定导航映射
+    const enterKeyMap = {
+      'transaction_date': () => inputRefs.stock_code.value?.focus(),
+      'stock_code': () => inputRefs.transaction_code.value?.focus(),
+      'transaction_code': () => inputRefs.quantityRefs[0]?.focus(),
+      'broker_fee': () => inputRefs.transaction_levy.value?.focus(),
+      'transaction_levy': () => inputRefs.stamp_duty.value?.focus(),
+      'stamp_duty': () => inputRefs.trading_fee.value?.focus(),
+      'trading_fee': () => inputRefs.deposit_fee.value?.focus(),
+      'deposit_fee': () => inputRefs.saveAndAddBtn.value?.click()
+    };
+
+    // 执行Enter键导航
+    if (enterKeyMap[fieldName]) {
+      enterKeyMap[fieldName]();
+    }
+    return;
+  }
+
+  // Tab键导航逻辑
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    console.log('Tab键导航 - 当前字段:', fieldName);
+
+    // 处理动态字段的Tab导航
+    if (fieldName.startsWith('quantity_')) {
+      const index = parseInt(fieldName.split('_')[1]);
+      inputRefs.priceRefs[index]?.focus();
+      return;
+    }
+    
+    if (fieldName.startsWith('price_')) {
+      // 点击添加按钮并聚焦到新行
+      addDetail();
+      nextTick(() => {
+        const newIndex = form.value.details.length - 1;
+        inputRefs.quantityRefs[newIndex]?.focus();
+      });
+      return;
+    }
+
+    // Tab键特定导航映射
+    const tabKeyMap = {
+      'transaction_date': () => inputRefs.stock_code.value?.focus(),
+      'stock_code': () => inputRefs.transaction_code.value?.focus(),
+      'transaction_code': () => inputRefs.quantityRefs[0]?.focus(),
+      'broker_fee': () => inputRefs.transaction_levy.value?.focus(),
+      'transaction_levy': () => inputRefs.stamp_duty.value?.focus(),
+      'stamp_duty': () => inputRefs.trading_fee.value?.focus(),
+      'trading_fee': () => inputRefs.deposit_fee.value?.focus(),
+      'deposit_fee': () => inputRefs.cancelBtn.value?.focus()
+    };
+
+    // 执行Tab键导航
+    if (tabKeyMap[fieldName]) {
+      tabKeyMap[fieldName]();
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -646,12 +692,11 @@ onMounted(() => {
 .btn-outline-primary {
   border-color: #dee2e6;
   color: #0d6efd;
-}
-
-.btn-outline-primary:hover {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
-  color: #fff;
+  &:hover {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+  }
 }
 
 .btn-outline-danger {
@@ -686,45 +731,20 @@ onMounted(() => {
   padding: 0.75rem !important;
 }
 
-.stock-selector {
-  position: relative;
-}
-
-.stock-selector .dropdown-menu {
-  margin-top: 1px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  font-size: 0.875rem;
-}
-
-.date-input input[type="date"] {
-  padding: 0.25rem 0.5rem;
-  height: calc(2rem + 2px);
-  font-size: 0.875rem;
-}
-
 .gap-2 {
   gap: 0.5rem !important;
 }
 
-/* 调整下拉菜单样式 */
-.dropdown-item {
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-}
-
-/* 调整输入框组合样式 */
 .input-group > .form-control,
 .input-group > .form-select {
   height: calc(2rem + 2px);
 }
 
-/* 调整删除按钮大小 */
 .btn-outline-danger {
   height: calc(2rem + 2px);
   line-height: 1;
 }
 
-/* 调整表单组间距 */
 .row > [class*="col-"] {
   padding-right: calc(var(--bs-gutter-x) * 0.5);
   padding-left: calc(var(--bs-gutter-x) * 0.5);
