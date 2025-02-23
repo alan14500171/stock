@@ -324,7 +324,7 @@
                     <td class="text-end">{{ stock.quantity || '-' }}</td>
                     <td class="text-end">{{ stock.transaction_count }}</td>
                     <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
-                    <td class="text-end">{{ formatNumber(stock.average_cost, 3) }}</td>
+                    <td class="text-end">-</td>
                     <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
                     <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
                     <td class="text-end" :class="getProfitClass(stock.realized_profit)">
