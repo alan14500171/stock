@@ -518,17 +518,12 @@ const fetchTransactions = async () => {
     const response = await axios.get('/api/stock/transactions/', { 
       params,
       headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      withCredentials: true,
-      // 添加 cache 控制
-      headers: {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
         'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+      },
+      withCredentials: true
     })
     
     if (response.data.success) {
@@ -585,7 +580,13 @@ const confirmDelete = async (transaction) => {
   
   try {
     loading.value = true
-    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`)
+    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`, {
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      withCredentials: true
+    })
     
     if (response.data.success) {
       message.success('交易记录删除成功')
