@@ -534,6 +534,10 @@ const submitForm = async () => {
       if (saveAndAddNext.value) {
         resetForm()
         saveAndAddNext.value = false
+        // 将焦点设置到交易日期输入框
+        nextTick(() => {
+          inputRefs.transaction_date.value?.focus()
+        })
       } else {
         router.push('/transactions')
       }
