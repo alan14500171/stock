@@ -15,7 +15,7 @@
           class="search-input"
           :value="searchText"
           @input="handleInput"
-          @keydown.enter="handleEnter"
+          @keydown.enter.prevent="handleEnter"
           @keydown.up.prevent="navigateList('up')"
           @keydown.down.prevent="navigateList('down')"
           :placeholder="'搜索股票代码或名称...'"
@@ -58,7 +58,7 @@
             class="dropdown-item"
             :class="{ 'active': index === currentIndex }"
             href="#"
-            @click.prevent="toggleStock(stock)"
+            @click.prevent="handleStockSelect(stock)"
             @mouseover="currentIndex = index"
           >
             <input 
@@ -217,20 +217,34 @@ const handleEnter = (event) => {
   if (showDropdown.value && filteredStocks.value.length > 0) {
     event.preventDefault()
     if (currentIndex.value >= 0) {
+      // 如果有选中的项，则选择该项
       toggleStock(filteredStocks.value[currentIndex.value])
-    } else {
-      toggleStock(filteredStocks.value[0])
+      showDropdown.value = false
+      searchText.value = ''
+      return
     }
-  } else {
-    emit('enter', event)
   }
+  // 如果没有下拉选项或没有选中项，则触发 enter 事件
+  emit('enter', event)
 }
 
 // 处理输入
 const handleInput = (event) => {
-  searchText.value = event.target.value
+  const value = event.target.value
+  searchText.value = value
   showDropdown.value = true
-  currentIndex.value = -1  // 重置选中索引
+  currentIndex.value = -1
+
+  // 如果输入的是数字，尝试自动补全港股代码
+  if (/^\d+$/.test(value)) {
+    const paddedCode = value.padStart(4, '0')
+    const matchingStock = props.stocks.find(s => 
+      s.market === 'HK' && s.code === paddedCode
+    )
+    if (matchingStock) {
+      currentIndex.value = filteredStocks.value.findIndex(s => s.code === matchingStock.code)
+    }
+  }
 }
 
 // 监听下拉框显示状态
@@ -261,6 +275,13 @@ const handleClickOutside = (event) => {
     showDropdown.value = false
     searchText.value = ''
   }
+}
+
+// 添加新的方法处理股票选择
+const handleStockSelect = (stock) => {
+  toggleStock(stock)
+  showDropdown.value = false
+  searchText.value = ''
 }
 
 onMounted(() => {
