@@ -186,6 +186,9 @@ const handleCodeEnter = async (event) => {
     if (response.data.success && response.data.data.length > 0) {
       const stockData = response.data.data[0] // 使用第一个匹配结果
       
+      // 设置市场
+      stockData.market = stockData.market === 'HK' || stockData.exchange === 'HKG' ? 'HK' : 'USA'
+
       // 检查是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
@@ -297,8 +300,8 @@ const validateForm = () => {
     if (form.value.market === 'HK' && !/^\d{1,4}$/.test(form.value.code)) {
       errors.value.code = '港股代码必须为1-4位数字'
       isValid = false
-    } else if (form.value.market === 'USA' && !/^[A-Za-z]{1,5}$/.test(form.value.code)) {
-      errors.value.code = '美股代码必须为1-5位字母'
+    } else if (form.value.market === 'USA' && !/^[A-Za-z0-9.]{1,5}$/.test(form.value.code)) {
+      errors.value.code = '美股代码必须为1-5位字母数字'
       isValid = false
     }
   }

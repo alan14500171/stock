@@ -489,31 +489,26 @@ const validateForm = () => {
   errors.value = {}
   let isValid = true
 
-  // 验证日期
   if (!form.value.transaction_date || !isValidDate(form.value.transaction_date)) {
     errors.value.transaction_date = '请输入有效的交易日期'
     isValid = false
   }
 
-  // 验证股票代码
   if (!form.value.stock_code) {
     errors.value.stock_code = '请选择股票'
     isValid = false
   }
 
-  // 验证交易编号
   if (!form.value.transaction_code) {
     errors.value.transaction_code = '请输入交易编号'
     isValid = false
   }
 
-  // 验证交易类型
   if (!form.value.transaction_type) {
     errors.value.transaction_type = '请选择交易类型'
     isValid = false
   }
 
-  // 验证明细
   form.value.details.forEach((detail, index) => {
     const price = parseFloat(detail.price)
     if (isNaN(price) || price <= 0) {
@@ -1064,13 +1059,18 @@ const handleNewStockCodeEnter = async (event) => {
   errors.value = {}
   newStock.value.alertMessage = ''
   
+  let queryCode = newStock.value.code.trim()
+  
   try {
-    // 使用 search_stock 接口查询股票信息
-    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(newStock.value.code)}`)
+    // 使用 search_stock 接口遍历不同市场
+    const response = await axios.get(`/api/stock/search_stock?code=${queryCode}`)
     
     if (response.data.success && response.data.data.length > 0) {
-      const stockData = response.data.data[0]
+      const stockData = response.data.data[0] // 使用第一个匹配结果
       
+      // 设置市场
+      stockData.market = stockData.market === 'HK' || stockData.exchange === 'HKG' ? 'HK' : 'USA'
+
       // 检查是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
@@ -1083,44 +1083,45 @@ const handleNewStockCodeEnter = async (event) => {
           stock => stock.code === stockData.code && stock.market === stockData.market
         )
         if (existingStock) {
-          newStock.value.alertMessage = '该股票代码已存在'
-          const modal = Modal.getInstance(addStockModal.value)
-          modal.hide()
-          // 使用已存在的股票信息
-          form.value.stock_code = existingStock.code
-          form.value.stock_name = existingStock.name
-          form.value.market = existingStock.market
+          // 如果股票已存在，直接使用现有股票信息
+          newStock.value = {
+            ...existingStock,
+            current_price: stockData.price
+          }
+          stockSelected.value = true
           return
         }
       }
 
-      // 更新新股票表单数据
+      // 更新表单数据
       newStock.value = {
-        market: stockData.market,
         code: stockData.code,
-        name: stockData.name || '',
-        full_name: stockData.name || '',
-        current_price: stockData.price,
-        alertMessage: stockData.name ? '' : '未能获取公司名称'
+        market: stockData.market,
+        name: stockData.code_name || '',
+        google_code: stockData.query,
+        current_price: stockData.price
       }
       
-      // 如果没有获取到名称，显示错误信息
-      if (!stockData.name) {
+      if (newStock.value.name) {
+        stockSelected.value = true
+      }
+      
+      if (!newStock.value.name) {
         errors.value.name = '未能获取公司名称'
       }
     } else {
       newStock.value.alertMessage = '未找到股票信息，请检查股票代码是否正确'
-      resetFormExceptCode()
+      resetNewStockExceptCode()
     }
   } catch (error) {
     console.error('查询股票信息失败:', error)
     newStock.value.alertMessage = '查询失败，请检查股票代码是否正确'
-    resetFormExceptCode()
+    resetNewStockExceptCode()
   }
 }
 
 // 重置表单（除了股票代码）
-const resetFormExceptCode = () => {
+const resetNewStockExceptCode = () => {
   const currentCode = newStock.value.code
   newStock.value = {
     market: '',
@@ -1163,8 +1164,8 @@ const submitNewStock = async () => {
     if (newStock.value.market === 'HK' && !/^\d{1,4}$/.test(newStock.value.code)) {
       errors.value.code = '港股代码必须为1-4位数字'
       isValid = false
-    } else if (newStock.value.market === 'USA' && !/^[A-Za-z]{1,5}$/.test(newStock.value.code)) {
-      errors.value.code = '美股代码必须为1-5位字母'
+    } else if (newStock.value.market === 'USA' && !/^[A-Za-z0-9.]{1,5}$/.test(newStock.value.code)) {
+      errors.value.code = '美股代码必须为1-5位字母数字'
       isValid = false
     }
   }
