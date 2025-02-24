@@ -24,6 +24,7 @@ def get_transactions():
         end_date = request.args.get('end_date')
         market = request.args.get('market')
         stock_codes = request.args.getlist('stock_codes[]')
+        transaction_code = request.args.get('transaction_code')
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 10))
         
@@ -44,6 +45,9 @@ def get_transactions():
             placeholders = ','.join(['%s'] * len(stock_codes))
             conditions.append(f"t.stock_code IN ({placeholders})")
             params.extend(stock_codes)
+        if transaction_code:
+            conditions.append("t.transaction_code LIKE %s")
+            params.append(f"%{transaction_code}%")
             
         where_clause = " AND ".join(conditions)
         

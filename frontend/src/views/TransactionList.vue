@@ -63,13 +63,25 @@ DD: 15"></i>
             class="form-select form-select-sm" 
             v-model="searchForm.market"
             ref="market"
-            @keydown.enter.prevent="focusNext($event, 'search')"
-            @keydown.tab="focusNext($event, 'search')"
+            @keydown.enter.prevent="focusNext($event, 'transactionCode')"
+            @keydown.tab="focusNext($event, 'transactionCode')"
           >
             <option value="">全部</option>
             <option value="HK">HK</option>
             <option value="USA">USA</option>
           </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">交易编号</label>
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            v-model="searchForm.transactionCode"
+            ref="transactionCode"
+            @keydown.enter.prevent="focusNext($event, 'search')"
+            @keydown.tab="focusNext($event, 'search')"
+            placeholder="输入交易编号"
+          />
         </div>
         <div class="col-md-4">
           <label class="form-label small">股票代码</label>
@@ -97,21 +109,21 @@ DD: 15"></i>
         <table class="table table-hover table-sm mb-0">
           <thead class="table-light">
             <tr>
-              <th style="width: 120px" class="text-center">日期</th>
-              <th style="width: 50px" class="text-center">市场</th>
-              <th style="width: 140px" class="text-center">股票代码</th>
-              <th style="width: 120px" class="text-center">交易编号</th>
-              <th style="width: 60px" class="text-center">买卖</th>
-              <th style="width: 200px" class="text-center">成交明细</th>
-              <th style="width: 90px" class="text-end">总金额</th>
-              <th style="width: 90px" class="text-end">经纪佣金</th>
-              <th style="width: 90px" class="text-end">交易征费</th>
-              <th style="width: 90px" class="text-end">印花税</th>
-              <th style="width: 90px" class="text-end">交易费</th>
-              <th style="width: 90px" class="text-end">存入证券费</th>
-              <th style="width: 90px" class="text-end">手续费</th>
-              <th style="width: 90px" class="text-end">净金额</th>
-              <th style="width: 90px" class="text-center">操作</th>
+              <th style="width: 100px" class="text-center">日期</th>
+              <th style="width: 40px" class="text-center">市场</th>
+              <th style="width: 120px" class="text-center">股票代码</th>
+              <th style="width: 100px" class="text-center">交易编号</th>
+              <th style="width: 50px" class="text-center">买卖</th>
+              <th style="width: 180px" class="text-center">成交明细</th>
+              <th style="width: 80px" class="text-end">总金额</th>
+              <th style="width: 70px" class="text-end">经纪佣金</th>
+              <th style="width: 70px" class="text-end">交易征费</th>
+              <th style="width: 70px" class="text-end">印花税</th>
+              <th style="width: 70px" class="text-end">交易费</th>
+              <th style="width: 70px" class="text-end">存入证券费</th>
+              <th style="width: 70px" class="text-end">手续费</th>
+              <th style="width: 80px" class="text-end">净金额</th>
+              <th style="width: 70px" class="text-center">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -238,7 +250,8 @@ const searchForm = ref({
   startDate: '',
   endDate: '',
   market: '',
-  stockCodes: []
+  stockCodes: [],
+  transactionCode: ''
 })
 
 // 日期处理
@@ -248,6 +261,7 @@ const endDateDisplayValue = ref('')
 // 引用
 const startDate = ref(null)
 const endDate = ref(null)
+const transactionCode = ref(null)
 const market = ref(null)
 const searchBtn = ref(null)
 
@@ -260,6 +274,9 @@ const focusNext = (event, target) => {
       break
     case 'market':
       market.value?.focus()
+      break
+    case 'transactionCode':
+      transactionCode.value?.focus()
       break
     case 'search':
       searchBtn.value?.focus()
@@ -504,6 +521,9 @@ const fetchTransactions = async () => {
     if (searchForm.value.stockCodes.length > 0) {
       searchForm.value.stockCodes.forEach(code => params.append('stock_codes[]', code))
     }
+    if (searchForm.value.transactionCode) {
+      params.append('transaction_code', searchForm.value.transactionCode)
+    }
     params.append('page', currentPage.value)
     params.append('per_page', pageSize)
     
@@ -534,10 +554,12 @@ const resetSearch = () => {
     startDate: '',
     endDate: '',
     market: '',
-    stockCodes: []
+    stockCodes: [],
+    transactionCode: ''
   }
-  currentPage.value = 1
-  fetchTransactions()
+  startDateDisplayValue.value = ''
+  endDateDisplayValue.value = ''
+  search()
 }
 
 // 删除交易记录
@@ -718,7 +740,7 @@ onMounted(() => {
 }
 
 .card-body {
-  padding: 1rem;
+  padding: 0.75rem;
 }
 
 .card-body.p-0 {
@@ -734,23 +756,25 @@ onMounted(() => {
 
 .table {
   margin-bottom: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .table th {
   white-space: nowrap;
   font-weight: 500;
-  padding: 0.5rem;
+  padding: 0.4rem;
   background-color: #f8f9fa;
   color: #495057;
   border-bottom: 2px solid #dee2e6;
+  font-size: 0.8125rem;
 }
 
 .table td {
-  padding: 0.5rem;
+  padding: 0.4rem;
   vertical-align: middle;
   border-bottom: 1px solid #dee2e6;
   white-space: nowrap;
+  font-size: 0.8125rem;
 }
 
 .text-muted {
@@ -758,7 +782,7 @@ onMounted(() => {
 }
 
 .badge {
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.4rem;
   font-weight: normal;
   font-size: 0.75rem;
 }
@@ -792,11 +816,10 @@ onMounted(() => {
 }
 
 .page-link {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  color: #0d6efd;
-  background-color: #fff;
-  border: 1px solid #dee2e6;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  min-width: 26px;
+  text-align: center;
 }
 
 .page-link:hover {
@@ -818,49 +841,92 @@ onMounted(() => {
   border-color: #dee2e6;
 }
 
-/* 操作按钮样式 */
+/* 搜索表单样式优化 */
+.form-control,
+.form-select {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  height: calc(1.75rem + 2px);
+  line-height: 1.2;
+}
+
+.form-label {
+  font-size: 0.8125rem;
+  margin-bottom: 0.25rem;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  height: calc(1.75rem + 2px);
+  line-height: 1.2;
+}
+
+/* 操作按钮样式优化 */
 .btn-xs {
-  font-size: 0.875rem;
-  line-height: 1.5;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid #dee2e6;
-  background: transparent;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.25rem;
-  min-width: 42px;
-  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 0.15rem 0.4rem;
+  min-width: 36px;
 }
 
 .btn-link.btn-xs {
-  text-decoration: none;
-  transition: all 0.2s;
-  padding: 0.25rem 0.75rem;
+  padding: 0.15rem 0.4rem;
 }
 
-.btn-link.btn-xs.text-primary {
-  color: #0d6efd !important;
-  border-color: #0d6efd;
+/* 分页样式优化 */
+.pagination {
+  margin-bottom: 0;
 }
 
-.btn-link.btn-xs.text-primary:hover {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
-  color: white !important;
+.page-link {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  min-width: 26px;
+  text-align: center;
 }
 
-.btn-link.btn-xs.text-danger {
-  color: #dc3545 !important;
-  border-color: #dc3545;
+/* 搜索区域间距优化 */
+.row.g-3 {
+  --bs-gutter-x: 0.75rem;
+  --bs-gutter-y: 0.75rem;
 }
 
-.btn-link.btn-xs.text-danger:hover {
-  background-color: #dc3545;
-  border-color: #dc3545;
-  color: white !important;
+.card-body {
+  padding: 0.75rem;
 }
 
-.gap-2 {
-  gap: 0.5rem !important;
+.card-body.border-bottom {
+  padding: 0.75rem;
+}
+
+/* 表格内容对齐和间距优化 */
+.table td.text-end,
+.table th.text-end {
+  padding-right: 0.5rem;
+}
+
+.table td.text-center,
+.table th.text-center {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* 操作列按钮组样式 */
+.d-flex.gap-1 {
+  gap: 0.25rem !important;
+}
+
+/* 调整股票代码和名称的显示 */
+td.text-center small {
+  display: block;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+}
+
+/* 调整成交明细的显示 */
+td > div {
+  line-height: 1.2;
+  margin: 0.1rem 0;
 }
 </style> 
