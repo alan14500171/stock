@@ -9,8 +9,9 @@ logger = logging.getLogger(__name__)
 
 class CurrencyChecker:
     MARKETS = {
-        'HK': 'NASDAQ',  # 港股使用 NASDAQ 市场
-        'USA': 'NASDAQ', # 美股使用 NASDAQ 市场
+        'HK': 'HKG',    # 香港交易所
+        'USA': 'NASDAQ', # 纳斯达克
+        'NYSE': 'NYSE',  # 纽约证券交易所
         'SH': 'SHA',     # 上海证券交易所
         'SZ': 'SHE'      # 深圳证券交易所
     }
@@ -29,11 +30,24 @@ class CurrencyChecker:
         :return: 股票价格或 None
         """
         try:
-            url = f'https://www.google.com/finance/quote/{query}'
-            logger.info(f"查询股价 URL: {url}")
+            # 添加时间戳参数避免缓存
+            timestamp = int(datetime.now().timestamp() * 1000)
+            url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
+            
+            logger.info("="*50)
+            logger.info(f"Google Finance 查询 URL: {url}")
+            logger.info("="*50)
+            
+            headers = CurrencyChecker.HEADERS.copy()
+            headers.update({
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'If-None-Match': '',
+                'If-Modified-Since': ''
+            })
             
             logger.info(f"开始发送请求...")
-            response = requests.get(url, headers=CurrencyChecker.HEADERS, timeout=10)
+            response = requests.get(url, headers=headers, timeout=10)
             logger.info(f"收到响应，状态码: {response.status_code}")
             response.raise_for_status()
             
@@ -61,22 +75,85 @@ class CurrencyChecker:
         :param code: 股票代码
         :return: 包含市场和价格信息的字典列表
         """
+        logger.info("\n" + "="*80)
+        logger.info(f"开始搜索股票代码: {code}")
+        logger.info("="*80)
+        
         results = []
         for market, exchange in CurrencyChecker.MARKETS.items():
             try:
+                # 添加时间戳参数避免缓存
+                timestamp = int(datetime.now().timestamp() * 1000)
                 query = f"{code}:{exchange}"
-                price = CurrencyChecker.get_stock_price(query)
-                if price is not None:
+                url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
+                
+                logger.info("\n" + "-"*50)
+                logger.info(f"市场: {market}")
+                logger.info(f"交易所: {exchange}")
+                logger.info(f"查询字符串: {query}")
+                logger.info(f"完整 URL: {url}")
+                logger.info("-"*50)
+                
+                # 使用与 get_stock_price 相同的请求方式
+                headers = CurrencyChecker.HEADERS.copy()
+                headers.update({
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'If-None-Match': '',
+                    'If-Modified-Since': ''
+                })
+                
+                logger.info(f"开始发送请求...")
+                response = requests.get(url, headers=headers, timeout=10)
+                logger.info(f"收到响应，状态码: {response.status_code}")
+                response.raise_for_status()
+                
+                logger.info("开始解析页面...")
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                logger.info("开始提取价格...")
+                result = CurrencyChecker._extract_price(soup)
+                
+                if result and result['price']:
+                    price = result['price']
+                    logger.info(f"✓ 成功：在市场 {market} 找到股票")
+                    logger.info(f"  - 当前价格: {price}")
+                    
+                    # 提取股票名称
+                    name_element = soup.find('div', {'class': 'zzDege'})
+                    stock_name = name_element.text if name_element else code
+                    
                     results.append({
                         'market': market,
                         'exchange': exchange,
                         'price': price,
-                        'query': query
+                        'query': query,
+                        'name': stock_name,
+                        'code': code
                     })
-                    logger.info(f"在市场 {market} 找到股票 {code} 价格: {price}")
+                else:
+                    logger.info(f"✗ 失败：市场 {market} 未找到股票")
             except Exception as e:
-                logger.error(f"搜索市场 {market} 的股票 {code} 时出错: {str(e)}")
+                logger.error(f"✗ 错误：搜索市场 {market} 时发生错误")
+                logger.error(f"  - 错误详情: {str(e)}")
                 continue
+                
+        if results:
+            logger.info("\n" + "="*50)
+            logger.info(f"搜索完成，共找到 {len(results)} 个匹配结果:")
+            for idx, result in enumerate(results, 1):
+                logger.info(f"\n结果 {idx}:")
+                logger.info(f"  市场: {result['market']}")
+                logger.info(f"  交易所: {result['exchange']}")
+                logger.info(f"  股票名称: {result['name']}")
+                logger.info(f"  价格: {result['price']}")
+                logger.info(f"  完整 URL: https://www.google.com/finance/quote/{result['query']}")
+            logger.info("="*50 + "\n")
+        else:
+            logger.warning("\n" + "="*50)
+            logger.warning(f"未在任何市场找到股票 {code}")
+            logger.warning("="*50 + "\n")
+            
         return results
 
     @staticmethod

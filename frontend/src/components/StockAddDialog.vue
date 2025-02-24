@@ -167,32 +167,30 @@ const handleCodeEnter = async (event) => {
   }
   
   errors.value = {}
+  alertMessage.value = ''
   
   let queryCode = form.value.code.trim()
   
   try {
-    // 先查询价格获取市场信息
-    const response = await axios.get(`/api/stock/check_price?code=${queryCode}`)
+    // 使用 search_stock 接口遍历不同市场
+    const response = await axios.get(`/api/stock/search_stock?code=${queryCode}`)
     
-    if (response.data.success && response.data.data.price) {
-      const data = response.data.data
-      
-      // 根据市场格式化股票代码
-      const formattedCode = formatStockCode(queryCode, data.market)
+    if (response.data.success && response.data.data.length > 0) {
+      const stockData = response.data.data[0] // 使用第一个匹配结果
       
       // 检查是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
-          search: formattedCode
+          search: stockData.code
         }
       })
       
       if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
         const existingStock = checkResponse.data.data.items.find(
-          stock => stock.code === formattedCode
+          stock => stock.code === stockData.code && stock.market === stockData.market
         )
         if (existingStock) {
-          message.warning('该股票代码已存在')
+          alertMessage.value = '该股票代码已存在'
           resetFormExceptCode()
           const codeInput = document.querySelector('.modal-body input[type="text"]')
           if (codeInput) {
@@ -203,11 +201,11 @@ const handleCodeEnter = async (event) => {
       }
 
       // 更新表单数据
-      form.value.current_price = data.price
-      form.value.google_code = data.google_code
-      form.value.name = data.name || ''
-      form.value.market = data.market
-      form.value.code = formattedCode
+      form.value.current_price = stockData.price
+      form.value.google_code = stockData.query
+      form.value.name = stockData.name || ''
+      form.value.market = stockData.market
+      form.value.code = stockData.code
       
       if (!form.value.name) {
         errors.value.name = '未能获取公司名称'
@@ -219,7 +217,7 @@ const handleCodeEnter = async (event) => {
         submitButton.focus()
       }
     } else {
-      message.error('查询失败，请检查股票代码是否正确')
+      alertMessage.value = '未找到股票信息，请检查股票代码是否正确'
       resetFormExceptCode()
       const codeInput = document.querySelector('.modal-body input[type="text"]')
       if (codeInput) {
@@ -227,7 +225,7 @@ const handleCodeEnter = async (event) => {
       }
     }
   } catch (error) {
-    message.error('查询失败，请检查股票代码是否正确')
+    alertMessage.value = '查询失败，请检查股票代码是否正确'
     resetFormExceptCode()
     const codeInput = document.querySelector('.modal-body input[type="text"]')
     if (codeInput) {

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, session, jsonify
+from flask import Blueprint, request, session, jsonify, make_response
 from routes.auth import login_required
 from config.database import db
 from datetime import datetime
@@ -1606,4 +1606,36 @@ def check_transaction_code():
         return jsonify({
             'success': False,
             'message': f'检查交易编号失败: {str(e)}'
+        }), 500
+
+@stock_bp.route('/search_stock')
+@login_required
+def search_stock():
+    """搜索股票代码"""
+    try:
+        code = request.args.get('code')
+        if not code:
+            return jsonify({
+                'success': False,
+                'message': '请提供股票代码'
+            }), 400
+
+        # 添加时间戳和缓存控制
+        response = make_response(jsonify({
+            'success': True,
+            'data': checker.search_stock(code)
+        }))
+        
+        # 设置响应头以防止缓存
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+
+    except Exception as e:
+        logger.error(f"搜索股票失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'搜索股票失败: {str(e)}'
         }), 500 
