@@ -99,7 +99,7 @@
               <th class="text-end">股票数量</th>
               <th class="text-end">笔数</th>
               <th class="text-end">买入总额</th>
-              <th class="text-end">移动加权平均价	</th>
+              <th class="text-end" title="移动加权平均价">平均价格</th>
               <th class="text-end">卖出总额</th>
               <th class="text-end">费用</th>
               <th class="text-end">已实现盈亏</th>
@@ -204,27 +204,30 @@
                         <button @click="toggleStock(market, stock.code)" class="btn btn-sm btn-outline-secondary">
                           <i :class="['bi bi-chevron-right', { 'rotate-90': isStockExpanded(market, stock.code) }]"></i>
                         </button>
-                    </td>
-                      <td>{{ stock.code }} <br> <small class="text-muted">{{ stock.name }}</small></td>
-                    <td class="text-end">{{ formatNumber(stock.current_quantity, 0) }}</td>
-                    <td class="text-end">{{ stock.transaction_count }}</td>
-                    <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
-                    <td class="text-end">{{ formatNumber(stock.average_cost, 3) }}</td>
-                    <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
-                    <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
-                    <td class="text-end" :class="getProfitClass(stock.realized_profit)">
-                      {{ formatNumber(stock.realized_profit) }}
-                    </td>
-                    <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
-                    <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                      {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
-                    </td>
-                    <td class="text-end" :class="getProfitClass(stock.total_profit)">
-                      {{ formatNumber(stock.total_profit) }}
-                    </td>
-                    <td class="text-end" :class="getProfitClass(stock.profit_rate)">
-                      {{ formatRate(stock.profit_rate) }}
-                    </td>
+                      </td>
+                      <td>
+                        {{ stock.code }}
+                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
+                      </td>
+                      <td class="text-end">{{ formatNumber(stock.current_quantity, 0) }}</td>
+                      <td class="text-end">{{ stock.transaction_count }}</td>
+                      <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
+                      <td class="text-end">{{ formatNumber(stock.average_cost, 3) }}</td>
+                      <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
+                      <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
+                      <td class="text-end" :class="getProfitClass(stock.realized_profit)">
+                        {{ formatNumber(stock.realized_profit) }}
+                      </td>
+                      <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
+                      <td class="text-end" :class="getProfitClass(stock.holding_profit)">
+                        {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
+                      </td>
+                      <td class="text-end" :class="getProfitClass(stock.total_profit)">
+                        {{ formatNumber(stock.total_profit) }}
+                      </td>
+                      <td class="text-end" :class="getProfitClass(stock.profit_rate)">
+                        {{ formatRate(stock.profit_rate) }}
+                      </td>
                     </tr>
                     <!-- 交易明细行 -->
                     <tr v-if="isStockExpanded(market, stock.code)">
@@ -236,7 +239,7 @@
                                 <th class="transaction-info">交易日期</th>
                                 <th class="quantity-price">数量@单价</th>
                                 <th class="text-end amount">买入金额</th>
-                                <th class="text-end cost">移动加权平均价</th>
+                                <th class="text-end cost" title="移动加权平均价">平均价格</th>
                                 <th class="text-end amount">卖出金额</th>
                                 <th class="text-end fees">费用</th>
                                 <th class="text-end profit">盈亏</th>
@@ -319,27 +322,30 @@
                         <button @click="toggleStock(market, stock.code)" class="btn btn-sm btn-outline-secondary">
                           <i :class="['bi bi-chevron-right', { 'rotate-90': isStockExpanded(market, stock.code) }]"></i>
                         </button>
-                    </td>
-                      <td>{{ stock.code }} <br> <small class="text-muted">{{ stock.name }}</small></td>
-                    <td class="text-end">{{ stock.quantity || '-' }}</td>
-                    <td class="text-end">{{ stock.transaction_count }}</td>
-                    <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
-                    <td class="text-end">-</td>
-                    <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
-                    <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
-                    <td class="text-end" :class="getProfitClass(stock.realized_profit)">
-                      {{ formatNumber(stock.realized_profit) }}
-                    </td>
-                    <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
-                    <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                      {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
-                    </td>
-                    <td class="text-end" :class="getProfitClass(stock.total_profit)">
-                      {{ formatNumber(stock.total_profit) }}
-                    </td>
-                    <td class="text-end" :class="getProfitClass(stock.profit_rate)">
-                      {{ formatRate(stock.profit_rate) }}
-                    </td>
+                      </td>
+                      <td>
+                        {{ stock.code }}
+                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
+                      </td>
+                      <td class="text-end">{{ stock.quantity || '-' }}</td>
+                      <td class="text-end">{{ stock.transaction_count }}</td>
+                      <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
+                      <td class="text-end">-</td>
+                      <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
+                      <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
+                      <td class="text-end" :class="getProfitClass(stock.realized_profit)">
+                        {{ formatNumber(stock.realized_profit) }}
+                      </td>
+                      <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
+                      <td class="text-end" :class="getProfitClass(stock.holding_profit)">
+                        {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
+                      </td>
+                      <td class="text-end" :class="getProfitClass(stock.total_profit)">
+                        {{ formatNumber(stock.total_profit) }}
+                      </td>
+                      <td class="text-end" :class="getProfitClass(stock.profit_rate)">
+                        {{ formatRate(stock.profit_rate) }}
+                      </td>
                     </tr>
                     <!-- 交易明细行 -->
                     <tr v-if="isStockExpanded(market, stock.code)">
@@ -351,7 +357,7 @@
                                 <th class="transaction-info">交易日期</th>
                                 <th class="quantity-price">数量@单价</th>
                                 <th class="text-end amount">买入金额</th>
-                                <th class="text-end cost">移动加权平均价</th>
+                                <th class="text-end cost" title="移动加权平均价">平均价格</th>
                                 <th class="text-end amount">卖出金额</th>
                                 <th class="text-end fees">费用</th>
                                 <th class="text-end profit">盈亏</th>
@@ -1681,5 +1687,12 @@ onMounted(() => {
 
 .stock-selector-sm :deep(.dropdown-menu) {
   min-width: 200px;
+}
+
+.company-name {
+  display: block;
+  font-size: 14px;
+  color: #64a7e3;
+  margin-top: 2px;
 }
 </style> 
