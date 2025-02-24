@@ -28,6 +28,9 @@ def process_transactions(transactions):
         stock_code = transaction['stock_code']
         stock_key = f"{market}-{stock_code}"
         
+        # 确保交易类型为大写
+        transaction['transaction_type'] = transaction['transaction_type'].upper()
+        
         if stock_key not in stock_groups:
             stock_groups[stock_key] = []
         stock_groups[stock_key].append(transaction)
@@ -103,18 +106,27 @@ def process_transactions(transactions):
             total_fees = float(trans['total_fees'] or 0)
             prev_avg_cost = float(trans['prev_avg_cost'] or 0)
             
-            if trans['transaction_type'] == 'BUY':
+            # 更新统计数据
+            if trans['transaction_type'].upper() == 'BUY':
                 stock_stats[stock_key]['current_quantity'] += total_quantity
                 stock_stats[stock_key]['total_buy'] += total_amount
+                stock_stats[stock_key]['total_fees'] += total_fees
+                market_stats[market]['transaction_count'] += trans['transaction_count']
+                market_stats[market]['total_buy'] += trans['total_amount']
+                market_stats[market]['total_fees'] += trans['total_fees']
                 last_buy_transaction = trans
             else:  # SELL
                 stock_stats[stock_key]['current_quantity'] -= total_quantity
                 stock_stats[stock_key]['total_sell'] += total_amount
-                # 计算已实现盈亏
-                realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
-                stock_stats[stock_key]['realized_profit'] += realized_profit
+                stock_stats[stock_key]['total_fees'] += total_fees
+                market_stats[market]['transaction_count'] += trans['transaction_count']
+                market_stats[market]['total_sell'] += trans['total_amount']
+                market_stats[market]['total_fees'] += trans['total_fees']
             
-            stock_stats[stock_key]['total_fees'] += total_fees
+            # 计算已实现盈亏
+            realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
+            stock_stats[stock_key]['realized_profit'] += realized_profit
+            
             transaction_details[stock_key].append(trans)
         
         # 计算持仓市值和持仓盈亏
@@ -144,10 +156,6 @@ def process_transactions(transactions):
             )
         
         # 更新市场统计
-        market_stats[market]['transaction_count'] += stock_stats[stock_key]['transaction_count']
-        market_stats[market]['total_buy'] += stock_stats[stock_key]['total_buy']
-        market_stats[market]['total_sell'] += stock_stats[stock_key]['total_sell']
-        market_stats[market]['total_fees'] += stock_stats[stock_key]['total_fees']
         market_stats[market]['realized_profit'] += stock_stats[stock_key]['realized_profit']
         
         if current_quantity > 0:
@@ -261,7 +269,7 @@ def get_profit_stats():
                 t.market,
                 t.stock_code,
                 s.name as stock_name,
-                t.transaction_type,
+                UPPER(t.transaction_type) as transaction_type,
                 t.transaction_date,
                 t.transaction_code,
                 t.total_quantity,
@@ -275,7 +283,8 @@ def get_profit_stats():
                 t.current_avg_cost,
                 (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
                 t.created_at,
-                ltd.last_transaction_date
+                ltd.last_transaction_date,
+                1 as transaction_count
             FROM stock.stock_transactions t
             LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
             LEFT JOIN last_transaction_dates ltd ON t.market = ltd.market AND t.stock_code = ltd.stock_code
@@ -308,77 +317,45 @@ def get_profit_stats():
             'message': f'获取盈利统计数据失败: {str(e)}'
         })
 
-def get_holding_stocks(user_id):
-    """获取用户的持仓股票列表"""
-    sql = """
-        WITH stock_summary AS (
+def get_holding_stocks():
+    try:
+        with get_db().cursor() as cursor:
+            # 获取每个股票的最后交易日期
+            cursor.execute("""
+            WITH last_transaction_dates AS (
+                SELECT 
+                    market,
+                    stock_code,
+                    MAX(transaction_date) as last_transaction_date
+                FROM stock.stock_transactions
+                GROUP BY market, stock_code
+            )
             SELECT 
-                s.market,
-                s.code,
+                t.market,
+                t.stock_code,
                 s.name as stock_name,
-                s.full_name,
-                SUM(CASE 
-                    WHEN t.transaction_type = 'buy' THEN t.total_quantity 
-                    WHEN t.transaction_type = 'sell' THEN -t.total_quantity 
-                    ELSE 0 
-                END) as quantity,
-                SUM(CASE WHEN t.transaction_type = 'buy' THEN t.total_amount ELSE 0 END) as total_buy,
-                SUM(CASE WHEN t.transaction_type = 'buy' THEN 
-                    t.total_amount * COALESCE(
-                        (SELECT rate FROM stock.exchange_rates 
-                         WHERE currency = t.market 
-                         AND rate_date <= t.transaction_date 
-                         ORDER BY rate_date DESC LIMIT 1), 
-                        1
-                    ) 
-                ELSE 0 END) as total_buy_hkd,
-                SUM(CASE WHEN t.transaction_type = 'sell' THEN t.total_amount ELSE 0 END) as total_sell,
-                SUM(CASE WHEN t.transaction_type = 'sell' THEN 
-                    t.total_amount * COALESCE(
-                        (SELECT rate FROM stock.exchange_rates 
-                         WHERE currency = t.market 
-                         AND rate_date <= t.transaction_date 
-                         ORDER BY rate_date DESC LIMIT 1), 
-                        1
-                    ) 
-                ELSE 0 END) as total_sell_hkd,
-                SUM(t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                SUM((t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) * 
-                    COALESCE(
-                        (SELECT rate FROM stock.exchange_rates 
-                         WHERE currency = t.market 
-                         AND rate_date <= t.transaction_date 
-                         ORDER BY rate_date DESC LIMIT 1), 
-                        1
-                    )
-                ) as total_fees_hkd
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity ELSE -t.total_quantity END) as holding_quantity,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity ELSE 0 END) as total_buy_quantity,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'SELL' THEN t.total_quantity ELSE 0 END) as total_sell_quantity,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_amount ELSE 0 END) as total_buy_amount,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'SELL' THEN t.total_amount ELSE 0 END) as total_sell_amount,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee ELSE 0 END) as total_buy_fees,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'SELL' THEN t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee ELSE 0 END) as total_sell_fees,
+                MAX(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.current_avg_cost ELSE NULL END) as avg_cost,
+                MAX(ltd.last_transaction_date) as last_transaction_date
             FROM stock.stock_transactions t
-            JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-            WHERE t.user_id = %s
-            GROUP BY s.market, s.code, s.name, s.full_name
-            HAVING SUM(CASE 
-                WHEN t.transaction_type = 'buy' THEN t.total_quantity 
-                WHEN t.transaction_type = 'sell' THEN -t.total_quantity 
-                ELSE 0 
-            END) > 0
-        )
-        SELECT 
-            market,
-            code,
-            stock_name,
-            full_name,
-            quantity,
-            total_buy,
-            total_buy_hkd,
-            total_sell,
-            total_sell_hkd,
-            total_fees,
-            total_fees_hkd,
-            total_sell_hkd - total_buy_hkd - total_fees_hkd as realized_profit_hkd
-        FROM stock_summary
-        ORDER BY market, code
-    """
-    return db.fetch_all(sql, [user_id])
+            LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
+            LEFT JOIN last_transaction_dates ltd ON t.market = ltd.market AND t.stock_code = ltd.stock_code
+            GROUP BY t.market, t.stock_code, s.name
+            HAVING SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity ELSE -t.total_quantity END) > 0
+            ORDER BY last_transaction_date DESC, t.market, t.stock_code
+            """)
+            return cursor.fetchall()
+    except Exception as e:
+        print(f"Error in get_holding_stocks: {str(e)}")
+        return []
+    finally:
+        cursor.close()
 
 @profit_bp.route('/refresh_prices', methods=['POST'])
 @login_required
@@ -394,20 +371,20 @@ def refresh_stock_prices():
                 s.name as stock_name,
                 s.full_name,
                 SUM(CASE 
-                    WHEN t.transaction_type = 'buy' THEN t.total_quantity 
-                    WHEN t.transaction_type = 'sell' THEN -t.total_quantity 
+                    WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity 
+                    WHEN UPPER(t.transaction_type) = 'SELL' THEN -t.total_quantity 
                     ELSE 0 
                 END) as quantity,
-                SUM(CASE WHEN t.transaction_type = 'buy' THEN t.total_amount ELSE 0 END) as total_buy,
-                SUM(CASE WHEN t.transaction_type = 'sell' THEN t.total_amount ELSE 0 END) as total_sell,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_amount ELSE 0 END) as total_buy,
+                SUM(CASE WHEN UPPER(t.transaction_type) = 'SELL' THEN t.total_amount ELSE 0 END) as total_sell,
                 SUM(t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees
             FROM stock.stock_transactions t
             JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
             WHERE t.user_id = %s
             GROUP BY s.market, s.code, s.name, s.full_name
             HAVING SUM(CASE 
-                WHEN t.transaction_type = 'buy' THEN t.total_quantity 
-                WHEN t.transaction_type = 'sell' THEN -t.total_quantity 
+                WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity 
+                WHEN UPPER(t.transaction_type) = 'SELL' THEN -t.total_quantity 
                 ELSE 0 
             END) > 0
         """
@@ -450,7 +427,7 @@ def refresh_stock_prices():
                         WHERE user_id = %s 
                           AND stock_code = %s 
                           AND market = %s
-                          AND transaction_type = 'BUY'
+                          AND UPPER(transaction_type) = 'BUY'
                         ORDER BY transaction_date DESC, id DESC
                         LIMIT 1
                     """
@@ -471,7 +448,7 @@ def refresh_stock_prices():
                         SELECT 
                             SUM(
                                 CASE 
-                                    WHEN t.transaction_type = 'SELL' THEN 
+                                    WHEN UPPER(t.transaction_type) = 'SELL' THEN 
                                         t.total_amount - (t.total_quantity * t.prev_avg_cost) - 
                                         (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
                                     ELSE 0 

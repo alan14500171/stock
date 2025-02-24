@@ -497,8 +497,16 @@ const submitForm = async () => {
     submitting.value = true
     
     // 计算总数量和总金额
-    const totalQuantity = form.value.details.reduce((sum, detail) => sum + (parseFloat(detail.quantity) || 0), 0)
-    const totalAmount = form.value.details.reduce((sum, detail) => sum + ((parseFloat(detail.quantity) || 0) * (parseFloat(detail.price) || 0)), 0)
+    const totalQuantity = form.value.details.reduce((sum, detail) => {
+      const quantity = parseFloat(detail.quantity) || 0
+      return sum + quantity
+    }, 0)
+    
+    const totalAmount = form.value.details.reduce((sum, detail) => {
+      const quantity = parseFloat(detail.quantity) || 0
+      const price = parseFloat(detail.price) || 0
+      return sum + (quantity * price)
+    }, 0)
     
     const submitData = {
       transaction_date: form.value.transaction_date,

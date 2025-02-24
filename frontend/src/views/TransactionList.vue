@@ -579,19 +579,13 @@ const resetSearch = () => {
 
 // 删除交易记录
 const confirmDelete = async (transaction) => {
+  if (!window.confirm('确定要删除这条交易记录吗？')) {
+    return
+  }
+  
   try {
-    if (!window.confirm('确定要删除这条交易记录吗？')) {
-      return
-    }
-    
     loading.value = true
-    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`, {
-      headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      withCredentials: true
-    })
+    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`)
     
     if (response.data.success) {
       message.success('交易记录删除成功')
@@ -612,7 +606,6 @@ const confirmDelete = async (transaction) => {
     if (error.response?.status === 401) {
       message.error('登录已过期，请重新登录')
       router.push('/login')
-      return
     } else if (error.response?.status === 404) {
       message.error('交易记录不存在或已被删除')
       // 刷新列表以获取最新数据

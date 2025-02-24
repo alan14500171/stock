@@ -14,6 +14,23 @@ axios.defaults.baseURL = ''  // 移除基础URL，因为我们在请求时已经
 axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
+// 添加请求拦截器
+axios.interceptors.request.use(config => {
+  // 从localStorage获取token
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  
+  // 添加CSRF token
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  if (csrfToken) {
+    config.headers['X-CSRF-TOKEN'] = csrfToken
+  }
+  
+  return config
+})
+
 const app = createApp(App)
 
 // 注册路由

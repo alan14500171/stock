@@ -234,7 +234,14 @@ const form = ref({
   transaction_levy: 0,
   stamp_duty: 0,
   trading_fee: 0,
-  deposit_fee: 0
+  deposit_fee: 0,
+  market: '',
+  prev_quantity: 0,
+  prev_cost: 0,
+  prev_avg_cost: 0,
+  current_quantity: 0,
+  current_cost: 0,
+  current_avg_cost: 0
 })
 
 // 加载交易记录数据
@@ -264,7 +271,14 @@ const loadTransaction = async () => {
       transaction_levy: transaction.transaction_levy || 0,
       stamp_duty: transaction.stamp_duty || 0,
       trading_fee: transaction.trading_fee || 0,
-      deposit_fee: transaction.deposit_fee || 0
+      deposit_fee: transaction.deposit_fee || 0,
+      market: transaction.market,
+      prev_quantity: transaction.prev_quantity || 0,
+      prev_cost: transaction.prev_cost || 0,
+      prev_avg_cost: transaction.prev_avg_cost || 0,
+      current_quantity: transaction.current_quantity || 0,
+      current_cost: transaction.current_cost || 0,
+      current_avg_cost: transaction.current_avg_cost || 0
     }
   } catch (error) {
     showToast(error.message || '加载交易记录失败，请稍后重试', 'danger')
@@ -300,8 +314,16 @@ const submitForm = async () => {
     submitting.value = true
     
     // 计算总数量和总金额
-    const totalQuantity = form.value.details.reduce((sum, detail) => sum + (parseFloat(detail.quantity) || 0), 0)
-    const totalAmount = form.value.details.reduce((sum, detail) => sum + ((parseFloat(detail.quantity) || 0) * (parseFloat(detail.price) || 0)), 0)
+    const totalQuantity = form.value.details.reduce((sum, detail) => {
+      const quantity = parseFloat(detail.quantity) || 0
+      return sum + quantity
+    }, 0)
+    
+    const totalAmount = form.value.details.reduce((sum, detail) => {
+      const quantity = parseFloat(detail.quantity) || 0
+      const price = parseFloat(detail.price) || 0
+      return sum + (quantity * price)
+    }, 0)
     
     const submitData = {
       transaction_date: form.value.transaction_date,
@@ -319,7 +341,13 @@ const submitForm = async () => {
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
       trading_fee: parseFloat(form.value.trading_fee) || 0,
       deposit_fee: parseFloat(form.value.deposit_fee) || 0,
-      market: form.value.market
+      market: form.value.market,
+      prev_quantity: form.value.prev_quantity,
+      prev_cost: form.value.prev_cost,
+      prev_avg_cost: form.value.prev_avg_cost,
+      current_quantity: form.value.current_quantity,
+      current_cost: form.value.current_cost,
+      current_avg_cost: form.value.current_avg_cost
     }
     
     const response = await axios.put(`/api/stock/transactions/${route.params.id}`, submitData)

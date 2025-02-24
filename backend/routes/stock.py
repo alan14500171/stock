@@ -292,27 +292,47 @@ def update_transaction(id):
     try:
         data = request.get_json()
         
-        # 检查记录是否存在且属于当前用户
-        check_sql = """
-            SELECT t.*, 
-                   s.name as stock_name
-            FROM stock.stock_transactions t
-            LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-            WHERE t.id = %s AND t.user_id = %s
+        # 1. 获取原交易记录
+        transaction_sql = """
+            SELECT * FROM stock_transactions 
+            WHERE id = %s AND user_id = %s
         """
-        transaction = db.fetch_one(check_sql, [id, session['user_id']])
+        transaction = db.fetch_one(transaction_sql, [id, session['user_id']])
         
         if not transaction:
-            return jsonify({'success': False, 'message': '交易记录不存在或无权限修改'}), 404
+            return jsonify({'success': False, 'message': '交易记录不存在'}), 404
             
-        # 计算总数量和总金额
-        total_quantity = data['total_quantity']
-        total_amount = data['total_amount']
-        total_fees = (data['broker_fee'] + data['transaction_levy'] + 
-                     data['stamp_duty'] + data['trading_fee'] + data['deposit_fee'])
+        # 2. 计算总数量和总金额
+        total_quantity = float(data['total_quantity'])
+        total_amount = float(data['total_amount'])
+        total_fees = (
+            float(data['broker_fee']) + 
+            float(data['transaction_levy']) + 
+            float(data['stamp_duty']) + 
+            float(data['trading_fee']) + 
+            float(data['deposit_fee'])
+        )
         
-        # 获取该股票在此交易之前的所有交易
+        # 3. 获取该日期之前的所有交易记录的累计数量和成本
         prev_transactions_sql = """
+            WITH prev_transactions AS (
+                SELECT 
+                    transaction_type,
+                    total_quantity,
+                    total_amount,
+                    broker_fee,
+                    transaction_levy,
+                    stamp_duty,
+                    trading_fee,
+                    deposit_fee
+                FROM stock_transactions
+                WHERE user_id = %s 
+                    AND stock_code = %s
+                    AND market = %s
+                    AND transaction_date < %s
+                    AND id != %s
+                ORDER BY transaction_date, id
+            )
             SELECT 
                 SUM(CASE 
                     WHEN transaction_type = 'buy' THEN total_quantity 
@@ -320,32 +340,29 @@ def update_transaction(id):
                     ELSE 0 
                 END) as quantity,
                 SUM(CASE 
-                    WHEN transaction_type = 'buy' THEN total_amount + broker_fee + transaction_levy + stamp_duty + trading_fee + deposit_fee
-                    WHEN transaction_type = 'sell' THEN -(total_amount + broker_fee + transaction_levy + stamp_duty + trading_fee + deposit_fee)
+                    WHEN transaction_type = 'buy' THEN 
+                        total_amount + broker_fee + transaction_levy + stamp_duty + trading_fee + deposit_fee
+                    WHEN transaction_type = 'sell' THEN 
+                        -(total_amount + broker_fee + transaction_levy + stamp_duty + trading_fee + deposit_fee)
                     ELSE 0 
                 END) as cost
-            FROM stock.stock_transactions
-            WHERE user_id = %s 
-              AND stock_code = %s 
-              AND market = %s
-              AND transaction_date < %s
-              OR (transaction_date = %s AND id < %s)
+            FROM prev_transactions
         """
+        
         prev_holding = db.fetch_one(prev_transactions_sql, [
             session['user_id'], 
-            transaction['stock_code'], 
-            transaction['market'],
-            transaction['transaction_date'],
-            transaction['transaction_date'],
+            data['stock_code'], 
+            data['market'],
+            data['transaction_date'],
             id
         ])
         
-        # 计算交易前的持仓信息
+        # 4. 计算交易前的持仓信息
         prev_quantity = float(prev_holding['quantity'] if prev_holding and prev_holding['quantity'] else 0)
         prev_cost = float(prev_holding['cost'] if prev_holding and prev_holding['cost'] else 0)
         prev_avg_cost = prev_cost / prev_quantity if prev_quantity > 0 else 0
         
-        # 计算交易后的持仓信息
+        # 5. 计算交易后的持仓信息
         if data['transaction_type'].lower() == 'buy':
             current_quantity = prev_quantity + total_quantity
             current_cost = prev_cost + total_amount + total_fees
@@ -359,7 +376,7 @@ def update_transaction(id):
                 
         current_avg_cost = current_cost / current_quantity if current_quantity > 0 else 0
             
-        # 更新主记录
+        # 6. 更新主记录
         update_sql = """
             UPDATE stock_transactions 
             SET transaction_date = %s,
@@ -386,7 +403,7 @@ def update_transaction(id):
             data['transaction_date'],
             data['stock_code'],
             data['transaction_code'],
-            data['transaction_type'],
+            data['transaction_type'].lower(),
             total_quantity,
             total_amount,
             data['broker_fee'],
@@ -406,11 +423,11 @@ def update_transaction(id):
         
         db.execute(update_sql, params)
         
-        # 删除旧的明细记录
+        # 7. 删除旧的明细记录
         delete_details_sql = "DELETE FROM stock_transaction_details WHERE transaction_id = %s"
         db.execute(delete_details_sql, [id])
         
-        # 插入新的明细记录
+        # 8. 插入新的明细记录
         if data.get('details'):
             insert_details_sql = """
                 INSERT INTO stock_transaction_details 
@@ -424,7 +441,7 @@ def update_transaction(id):
                     detail['price']
                 ])
         
-        # 更新后续交易的移动加权平均价
+        # 9. 更新后续交易的移动加权平均价
         update_subsequent_sql = """
             WITH RECURSIVE transaction_chain AS (
                 -- 获取当前交易后的第一条记录
@@ -505,15 +522,17 @@ def update_transaction(id):
                     ELSE 0
                 END
         """
+        
+        # 执行更新后续交易的SQL
         db.execute(update_subsequent_sql, [
             current_quantity,
             current_cost,
             current_avg_cost,
             session['user_id'],
-            transaction['stock_code'],
-            transaction['market'],
-            transaction['transaction_date'],
-            transaction['transaction_date'],
+            data['stock_code'],
+            data['market'],
+            data['transaction_date'],
+            data['transaction_date'],
             id
         ])
         
@@ -521,6 +540,7 @@ def update_transaction(id):
             'success': True,
             'message': '交易记录更新成功',
             'data': {
+                'id': id,
                 'prev_quantity': prev_quantity,
                 'prev_cost': prev_cost,
                 'prev_avg_cost': prev_avg_cost,
