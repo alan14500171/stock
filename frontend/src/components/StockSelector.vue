@@ -1,5 +1,5 @@
 <template>
-  <div class="stock-selector">
+  <div class="stock-selector" data-testid="stock-selector-container">
     <div class="selected-items form-control" @click="showDropdown = !showDropdown">
       <div v-for="code in modelValue" :key="code" class="selected-tag">
         {{ getStockLabel(code) }}
@@ -21,6 +21,7 @@
           :placeholder="'搜索股票代码或名称...'"
           ref="input"
           @click="handleInputClick"
+          data-testid="stock-search-input"
         />
       </div>
 
@@ -60,6 +61,7 @@
             href="#"
             @click.prevent="handleStockSelect(stock)"
             @mouseover="currentIndex = index"
+            :data-testid="'stock-item-' + stock.code"
           >
             <input 
               type="checkbox" 

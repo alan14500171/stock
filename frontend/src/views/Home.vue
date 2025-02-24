@@ -1,20 +1,20 @@
 <template>
-  <div class="home-container">
+  <div class="home-container" data-testid="home-container">
     <div class="content-wrapper">
       <div class="row">
         <div class="col-12 mb-4">
-          <h2 class="section-title">快速操作</h2>
+          <h2 class="section-title" data-testid="home-section-title">快速操作</h2>
           <div class="row g-4">
             <!-- 盈利统计卡片 -->
             <div class="col-md-6">
-              <div class="card h-100">
+              <div class="card h-100" data-testid="profit-stats-card">
                 <div class="card-body">
-                  <h5 class="card-title">
+                  <h5 class="card-title" data-testid="profit-stats-title">
                     <i class="bi bi-graph-up text-primary"></i>
                     盈利统计
                   </h5>
                   <p class="card-text">查看您的交易盈亏情况，分析投资表现。</p>
-                  <router-link to="/profit/stats" class="btn btn-primary">
+                  <router-link to="/profit/stats" class="btn btn-primary" data-testid="view-profit-stats-btn">
                     查看统计
                   </router-link>
                 </div>
@@ -23,18 +23,18 @@
 
             <!-- 交易记录卡片 -->
             <div class="col-md-6">
-              <div class="card h-100">
+              <div class="card h-100" data-testid="transactions-card">
                 <div class="card-body">
-                  <h5 class="card-title">
+                  <h5 class="card-title" data-testid="transactions-title">
                     <i class="bi bi-journal-text text-success"></i>
                     交易记录
                   </h5>
                   <p class="card-text">管理您的所有交易记录，添加新的交易。</p>
                   <div class="btn-group">
-                    <router-link to="/transactions" class="btn btn-success">
+                    <router-link to="/transactions" class="btn btn-success" data-testid="view-transactions-btn">
                       查看记录
                     </router-link>
-                    <router-link to="/transactions/add" class="btn btn-outline-success">
+                    <router-link to="/transactions/add" class="btn btn-outline-success" data-testid="add-transaction-btn">
                       添加交易
                     </router-link>
                   </div>
@@ -44,14 +44,14 @@
 
             <!-- 股票管理卡片 -->
             <div class="col-md-6">
-              <div class="card h-100">
+              <div class="card h-100" data-testid="stocks-card">
                 <div class="card-body">
-                  <h5 class="card-title">
+                  <h5 class="card-title" data-testid="stocks-title">
                     <i class="bi bi-briefcase text-info"></i>
                     股票管理
                   </h5>
                   <p class="card-text">管理您的股票列表，添加新的股票。</p>
-                  <router-link to="/stocks" class="btn btn-info text-white">
+                  <router-link to="/stocks" class="btn btn-info text-white" data-testid="manage-stocks-btn">
                     管理股票
                   </router-link>
                 </div>
@@ -60,14 +60,14 @@
 
             <!-- 汇率管理卡片 -->
             <div class="col-md-6">
-              <div class="card h-100">
+              <div class="card h-100" data-testid="exchange-rates-card">
                 <div class="card-body">
-                  <h5 class="card-title">
+                  <h5 class="card-title" data-testid="exchange-rates-title">
                     <i class="bi bi-currency-exchange text-warning"></i>
                     汇率管理
                   </h5>
                   <p class="card-text">更新和管理港币、美元等货币汇率。</p>
-                  <router-link to="/exchange-rates" class="btn btn-warning text-white">
+                  <router-link to="/exchange-rates" class="btn btn-warning text-white" data-testid="manage-exchange-rates-btn">
                     管理汇率
                   </router-link>
                 </div>

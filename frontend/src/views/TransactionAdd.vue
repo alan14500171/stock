@@ -1,14 +1,14 @@
 <template>
   <div class="card">
     <div class="card-header">
-      <h5 class="mb-0">添加交易记录</h5>
+      <h5 class="mb-0" data-testid="transaction-add-title">添加交易记录</h5>
     </div>
     
     <div class="card-body">
       <!-- 基本信息 -->
       <div class="row mb-4">
         <div class="col-md-4">
-          <label class="form-label">交易日期</label>
+          <label class="form-label" data-testid="transaction-date-label">交易日期</label>
           <div class="date-input">
             <input
               type="text"
@@ -19,13 +19,14 @@
               :class="{ 'is-invalid': errors.transaction_date }"
               placeholder="YYYY-MM-DD"
               :ref="el => inputRefs.transaction_date.value = el"
+              data-testid="transaction-date-input"
             />
-            <div class="invalid-feedback">{{ errors.transaction_date }}</div>
+            <div class="invalid-feedback" data-testid="transaction-date-error">{{ errors.transaction_date }}</div>
           </div>
         </div>
 
         <div class="col-md-4">
-          <label class="form-label">股票代码</label>
+          <label class="form-label" data-testid="stock-code-label">股票代码</label>
           <div class="position-relative">
             <div class="stock-input-wrapper">
               <input
@@ -43,16 +44,17 @@
                 @keydown.esc="closeStockList"
                 :class="{ 'is-invalid': errors.stock_code }"
                 placeholder="输入代码或名称搜索"
+                data-testid="stock-code-input"
               />
-              <span v-if="form.stock_code && form.stock_name" class="selected-stock">
-                <span :class="['market-tag', form.market === 'HK' ? 'hk' : 'usa']">{{ form.market }}</span>
+              <span v-if="form.stock_code && form.stock_name" class="selected-stock" data-testid="selected-stock-info">
+                <span :class="['market-tag', form.market === 'HK' ? 'hk' : 'usa']" data-testid="selected-stock-market">{{ form.market }}</span>
                 {{ form.stock_code }} {{ form.stock_name }}
               </span>
             </div>
-            <div class="invalid-feedback">{{ errors.stock_code }}</div>
+            <div class="invalid-feedback" data-testid="stock-code-error">{{ errors.stock_code }}</div>
             
             <!-- 股票搜索结果下拉列表 -->
-            <div v-if="showStockList && filteredStocks.length > 0" class="stock-list">
+            <div v-if="showStockList && filteredStocks.length > 0" class="stock-list" data-testid="stock-search-list">
               <a
                 v-for="(stock, index) in filteredStocks"
                 :key="stock.code"
@@ -61,6 +63,7 @@
                 :class="{ 'active': index === currentStockIndex }"
                 @click.prevent="selectStock(stock)"
                 @mouseover="currentStockIndex = index"
+                :data-testid="'stock-item-' + stock.code"
               >
                 <span :class="['market-tag', stock.market === 'HK' ? 'hk' : 'usa']">{{ stock.market }}</span>
                 {{ stock.code }} - {{ stock.name }}
@@ -70,7 +73,7 @@
         </div>
 
         <div class="col-md-4">
-          <label class="form-label">交易编号</label>
+          <label class="form-label" data-testid="transaction-code-label">交易编号</label>
           <input
             type="text"
             class="form-control"
@@ -80,14 +83,15 @@
             @blur="handleTransactionCodeBlur"
             @keydown="handleKeyNavigation($event, 'transaction_code')"
             :class="{ 'is-invalid': errors.transaction_code }"
+            data-testid="transaction-code-input"
           />
-          <div class="invalid-feedback">{{ errors.transaction_code }}</div>
+          <div class="invalid-feedback" data-testid="transaction-code-error">{{ errors.transaction_code }}</div>
         </div>
       </div>
 
       <div class="row mb-4">
         <div class="col-md-4">
-          <label class="form-label">交易类型</label>
+          <label class="form-label" data-testid="transaction-type-label">交易类型</label>
           <input
             type="text"
             class="form-control"
@@ -96,40 +100,43 @@
             @keydown="handleKeyNavigation($event, 'transaction_type')"
             :class="{ 'is-invalid': errors.transaction_type }"
             placeholder="P-买入 S-卖出"
+            data-testid="transaction-type-input"
           />
-          <div class="invalid-feedback">{{ errors.transaction_type }}</div>
+          <div class="invalid-feedback" data-testid="transaction-type-error">{{ errors.transaction_type }}</div>
         </div>
       </div>
 
       <!-- 成交明细 -->
       <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <label class="form-label mb-0">成交明细</label>
+          <label class="form-label mb-0" data-testid="transaction-details-label">成交明细</label>
           <button 
             type="button" 
             class="btn btn-sm btn-outline-primary" 
             @click="addDetail"
             :ref="el => inputRefs.addDetailBtn.value = el"
+            data-testid="add-detail-button"
           >
             添加成交记录
           </button>
         </div>
 
-        <div class="border rounded p-3">
-          <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2">
+        <div class="border rounded p-3" data-testid="transaction-details-container">
+          <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2" :data-testid="'detail-row-' + index">
             <div class="col-md-5">
-              <label class="form-label">数量</label>
+              <label class="form-label" :data-testid="'quantity-label-' + index">数量</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="detail.quantity"
                 :ref="el => setQuantityRef(el, index)"
                 @keydown="handleKeyNavigation($event, `quantity_${index}`)"
+                :data-testid="'quantity-input-' + index"
               />
             </div>
 
             <div class="col-md-5">
-              <label class="form-label">价格</label>
+              <label class="form-label" :data-testid="'price-label-' + index">价格</label>
               <input
                 type="text"
                 class="form-control"
@@ -137,8 +144,9 @@
                 :ref="el => setPriceRef(el, index)"
                 @keydown="handleKeyNavigation($event, `price_${index}`)"
                 :class="{ 'is-invalid': errors[`price_${index}`] }"
+                :data-testid="'price-input-' + index"
               />
-              <div class="invalid-feedback">{{ errors[`price_${index}`] }}</div>
+              <div class="invalid-feedback" :data-testid="'price-error-' + index">{{ errors[`price_${index}`] }}</div>
             </div>
 
             <div class="col-md-2 d-flex align-items-end">
@@ -147,6 +155,7 @@
                 class="btn btn-outline-danger w-100"
                 @click="removeDetail(index)"
                 :disabled="form.details.length === 1"
+                :data-testid="'remove-detail-button-' + index"
               >
                 删除
               </button>
@@ -157,61 +166,66 @@
 
       <!-- 费用明细 -->
       <div class="mb-4">
-        <label class="form-label">费用明细</label>
-        <div class="border rounded p-3">
+        <label class="form-label" data-testid="fees-label">费用明细</label>
+        <div class="border rounded p-3" data-testid="fees-container">
           <div class="row g-3">
             <div class="col-md-4">
-              <label class="form-label">经纪佣金</label>
+              <label class="form-label" data-testid="broker-fee-label">经纪佣金</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="form.broker_fee"
                 :ref="el => inputRefs.broker_fee.value = el"
                 @keydown="handleKeyNavigation($event, 'broker_fee')"
+                data-testid="broker-fee-input"
               />
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">交易征费</label>
+              <label class="form-label" data-testid="transaction-levy-label">交易征费</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="form.transaction_levy"
                 :ref="el => inputRefs.transaction_levy.value = el"
                 @keydown="handleKeyNavigation($event, 'transaction_levy')"
+                data-testid="transaction-levy-input"
               />
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">印花税</label>
+              <label class="form-label" data-testid="stamp-duty-label">印花税</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="form.stamp_duty"
                 :ref="el => inputRefs.stamp_duty.value = el"
                 @keydown="handleKeyNavigation($event, 'stamp_duty')"
+                data-testid="stamp-duty-input"
               />
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">交易费</label>
+              <label class="form-label" data-testid="trading-fee-label">交易费</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="form.trading_fee"
                 :ref="el => inputRefs.trading_fee.value = el"
                 @keydown="handleKeyNavigation($event, 'trading_fee')"
+                data-testid="trading-fee-input"
               />
             </div>
 
             <div class="col-md-4">
-              <label class="form-label">存入证券费</label>
+              <label class="form-label" data-testid="deposit-fee-label">存入证券费</label>
               <input
                 type="text"
                 class="form-control"
                 v-model="form.deposit_fee"
                 :ref="el => inputRefs.deposit_fee.value = el"
                 @keydown="handleKeyNavigation($event, 'deposit_fee')"
+                data-testid="deposit-fee-input"
               />
             </div>
           </div>
@@ -225,6 +239,7 @@
           class="btn btn-secondary" 
           @click="$router.back()"
           :ref="el => inputRefs.cancelBtn.value = el"
+          data-testid="cancel-button"
         >
           取消
         </button>
@@ -234,6 +249,7 @@
           :disabled="submitting"
           :ref="el => inputRefs.saveBtn.value = el"
           @click="submitForm"
+          data-testid="save-button"
         >
           <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
           保存
@@ -244,6 +260,7 @@
           :disabled="submitting" 
           @click="saveAndAdd"
           :ref="el => inputRefs.saveAndAddBtn.value = el"
+          data-testid="save-and-add-button"
         >
           <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
           保存并添加下一条
@@ -252,17 +269,17 @@
     </div>
 
     <!-- 添加股票对话框 -->
-    <div class="modal fade" id="addStockModal" tabindex="-1" ref="addStockModal">
+    <div class="modal fade" id="addStockModal" tabindex="-1" ref="addStockModal" data-testid="add-stock-modal">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">添加新股票</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h5 class="modal-title" data-testid="add-stock-modal-title">添加新股票</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" data-testid="add-stock-modal-close"></button>
           </div>
           <div class="modal-body">
             <form @submit.prevent="submitNewStock">
               <div class="mb-3">
-                <label class="form-label">股票代码</label>
+                <label class="form-label" data-testid="new-stock-code-label">股票代码</label>
                 <input 
                   type="text" 
                   class="form-control" 
@@ -271,64 +288,69 @@
                   placeholder="输入股票代码后将自动查询股票信息"
                   @keydown.enter.prevent="handleNewStockCodeEnter"
                   @keydown.tab.prevent="handleNewStockCodeEnter"
+                  data-testid="new-stock-code-input"
                 />
-                <div class="invalid-feedback">{{ errors.code }}</div>
+                <div class="invalid-feedback" data-testid="new-stock-code-error">{{ errors.code }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">市场</label>
+                <label class="form-label" data-testid="new-stock-market-label">市场</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="newStock.market"
                   :class="{ 'is-invalid': errors.market }"
                   readonly
+                  data-testid="new-stock-market-input"
                 />
-                <div class="invalid-feedback">{{ errors.market }}</div>
+                <div class="invalid-feedback" data-testid="new-stock-market-error">{{ errors.market }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">股票名称</label>
+                <label class="form-label" data-testid="new-stock-name-label">股票名称</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="newStock.name"
                   :class="{ 'is-invalid': errors.name }"
                   readonly
+                  data-testid="new-stock-name-input"
                 />
-                <div class="invalid-feedback">{{ errors.name }}</div>
+                <div class="invalid-feedback" data-testid="new-stock-name-error">{{ errors.name }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">谷歌查询代码</label>
+                <label class="form-label" data-testid="new-stock-google-code-label">谷歌查询代码</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="newStock.google_code"
                   readonly
+                  data-testid="new-stock-google-code-input"
                 />
               </div>
 
               <div class="mb-3">
-                <label class="form-label">当前股价</label>
+                <label class="form-label" data-testid="new-stock-price-label">当前股价</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   :value="newStock.current_price"
                   readonly
+                  data-testid="new-stock-price-input"
                 />
                 <div v-if="newStock.alertMessage" :class="{ 
                     'text-danger': newStock.alertMessage.includes('已存在'), 
                     'text-primary': newStock.alertMessage.includes('查询失败')
-                  }">
+                  }" data-testid="new-stock-alert-message">
                   {{ newStock.alertMessage }}
                 </div>
               </div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-            <button type="button" class="btn btn-primary" @click="submitNewStock" :disabled="submittingStock">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-testid="add-stock-modal-cancel">取消</button>
+            <button type="button" class="btn btn-primary" @click="submitNewStock" :disabled="submittingStock" data-testid="add-stock-modal-submit">
               <span v-if="submittingStock" class="spinner-border spinner-border-sm me-1"></span>
               确认添加
             </button>

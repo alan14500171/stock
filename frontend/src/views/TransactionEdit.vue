@@ -1,8 +1,8 @@
 # 创建新的编辑页面
 <template>
-  <div class="card">
+  <div class="card" data-testid="transaction-edit-container">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">编辑交易记录</h5>
+      <h5 class="mb-0" data-testid="transaction-edit-title">编辑交易记录</h5>
       <button class="btn btn-outline-secondary btn-sm" @click="$router.back()">
         返回列表
       </button>
@@ -13,7 +13,7 @@
         <!-- 基本信息 -->
         <div class="row mb-4">
           <div class="col-md-3">
-            <label class="form-label">交易日期</label>
+            <label class="form-label" data-testid="transaction-date-label">交易日期</label>
             <input
               type="date"
               class="form-control"
@@ -21,12 +21,13 @@
               :class="{ 'is-invalid': errors.transaction_date }"
               readonly
               disabled
+              data-testid="transaction-date-input"
             />
-            <div class="invalid-feedback">{{ errors.transaction_date }}</div>
+            <div class="invalid-feedback" data-testid="transaction-date-error">{{ errors.transaction_date }}</div>
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">股票代码</label>
+            <label class="form-label" data-testid="stock-code-label">股票代码</label>
             <input
               type="text"
               class="form-control"
@@ -34,12 +35,13 @@
               :class="{ 'is-invalid': errors.stock_code }"
               readonly
               disabled
+              data-testid="stock-code-input"
             />
-            <div class="invalid-feedback">{{ errors.stock_code }}</div>
+            <div class="invalid-feedback" data-testid="stock-code-error">{{ errors.stock_code }}</div>
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">交易编号</label>
+            <label class="form-label" data-testid="transaction-code-label">交易编号</label>
             <input
               type="text"
               class="form-control"
@@ -47,71 +49,73 @@
               :class="{ 'is-invalid': errors.transaction_code }"
               readonly
               disabled
+              data-testid="transaction-code-input"
             />
-            <div class="invalid-feedback">{{ errors.transaction_code }}</div>
+            <div class="invalid-feedback" data-testid="transaction-code-error">{{ errors.transaction_code }}</div>
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">买卖</label>
+            <label class="form-label" data-testid="transaction-type-label">买卖</label>
             <select
               class="form-select"
               v-model="form.transaction_type"
               :class="{ 'is-invalid': errors.transaction_type }"
               disabled
+              data-testid="transaction-type-input"
             >
               <option value="buy">买入</option>
               <option value="sell">卖出</option>
             </select>
-            <div class="invalid-feedback">{{ errors.transaction_type }}</div>
+            <div class="invalid-feedback" data-testid="transaction-type-error">{{ errors.transaction_type }}</div>
           </div>
         </div>
 
         <!-- 成交明细 -->
         <div class="mb-4">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <label class="form-label mb-0">成交明细</label>
+            <label class="form-label mb-0" data-testid="transaction-details-label">成交明细</label>
             <button 
               type="button" 
               class="btn btn-sm btn-outline-primary" 
               @click="addDetail"
+              data-testid="add-detail-btn"
             >
               添加成交记录
             </button>
           </div>
 
-          <div class="border rounded p-3">
-            <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2">
+          <div class="border rounded p-3" data-testid="transaction-details-container">
+            <div v-for="(detail, index) in form.details" :key="index" class="row g-2 mb-2" :data-testid="'detail-row-' + index">
               <div class="col-md-5">
-                <div class="input-group">
-                  <span class="input-group-text">数量</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="detail.quantity"
-                  />
-                </div>
+                <label class="form-label" :data-testid="'quantity-label-' + index">数量</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="detail.quantity"
+                  :data-testid="'quantity-input-' + index"
+                />
               </div>
 
               <div class="col-md-5">
-                <div class="input-group">
-                  <span class="input-group-text">价格</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="detail.price"
-                    step="0.001"
-                    :class="{ 'is-invalid': errors[`price_${index}`] }"
-                  />
-                  <div class="invalid-feedback">{{ errors[`price_${index}`] }}</div>
-                </div>
+                <label class="form-label" :data-testid="'price-label-' + index">价格</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="detail.price"
+                  step="0.001"
+                  :class="{ 'is-invalid': errors[`price_${index}`] }"
+                  :data-testid="'price-input-' + index"
+                />
+                <div class="invalid-feedback" :data-testid="'price-error-' + index">{{ errors[`price_${index}`] }}</div>
               </div>
 
-              <div class="col-md-2">
+              <div class="col-md-2 d-flex align-items-end">
                 <button
                   type="button"
-                  class="btn btn-outline-danger"
+                  class="btn btn-outline-danger w-100"
                   @click="removeDetail(index)"
                   :disabled="form.details.length === 1"
+                  :data-testid="'remove-detail-btn-' + index"
                 >
                   删除
                 </button>
@@ -122,67 +126,62 @@
 
         <!-- 费用明细 -->
         <div class="mb-4">
-          <label class="form-label">费用明细</label>
-          <div class="border rounded p-3">
+          <label class="form-label" data-testid="fees-label">费用明细</label>
+          <div class="border rounded p-3" data-testid="fees-container">
             <div class="row g-3">
               <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">经纪佣金</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.broker_fee"
-                    step="0.01"
-                  />
-                </div>
+                <label class="form-label" data-testid="broker-fee-label">经纪佣金</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="form.broker_fee"
+                  step="0.01"
+                  data-testid="broker-fee-input"
+                />
               </div>
 
               <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">交易征费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.transaction_levy"
-                    step="0.01"
-                  />
-                </div>
+                <label class="form-label" data-testid="transaction-levy-label">交易征费</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="form.transaction_levy"
+                  step="0.01"
+                  data-testid="transaction-levy-input"
+                />
               </div>
 
               <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">印花税</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.stamp_duty"
-                    step="0.01"
-                  />
-                </div>
+                <label class="form-label" data-testid="stamp-duty-label">印花税</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="form.stamp_duty"
+                  step="0.01"
+                  data-testid="stamp-duty-input"
+                />
               </div>
 
               <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">交易费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.trading_fee"
-                    step="0.01"
-                  />
-                </div>
+                <label class="form-label" data-testid="trading-fee-label">交易费</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="form.trading_fee"
+                  step="0.01"
+                  data-testid="trading-fee-input"
+                />
               </div>
 
               <div class="col-md-4">
-                <div class="input-group">
-                  <span class="input-group-text">存入证券费</span>
-                  <input
-                    type="number"
-                    class="form-control"
-                    v-model="form.deposit_fee"
-                    step="0.01"
-                  />
-                </div>
+                <label class="form-label" data-testid="deposit-fee-label">存入证券费</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  v-model="form.deposit_fee"
+                  step="0.01"
+                  data-testid="deposit-fee-input"
+                />
               </div>
             </div>
           </div>
@@ -194,6 +193,7 @@
             type="button" 
             class="btn btn-secondary" 
             @click="$router.back()"
+            data-testid="cancel-btn"
           >
             取消
           </button>
@@ -201,6 +201,7 @@
             type="submit" 
             class="btn btn-primary" 
             :disabled="submitting"
+            data-testid="save-btn"
           >
             <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
             保存修改

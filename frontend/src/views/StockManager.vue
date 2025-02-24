@@ -3,15 +3,15 @@
     <div class="card">
       <div class="card-header">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="mb-0">股票管理</h5>
-          <button class="btn btn-primary btn-sm" @click="showAddDialog">
+          <h5 class="mb-0" data-testid="stock-manager-title">股票管理</h5>
+          <button class="btn btn-primary btn-sm" @click="showAddDialog" data-testid="add-stock-btn">
             添加股票
           </button>
         </div>
         
         <div class="d-flex align-items-center">
           <div class="me-3" style="width: 200px;">
-            <select class="form-select form-select-sm" v-model="searchForm.market" @change="search">
+            <select class="form-select form-select-sm" v-model="searchForm.market" @change="search" data-testid="stock-market-select">
               <option value="">市场</option>
               <option value="HK">港股</option>
               <option value="USA">美股</option>
@@ -25,8 +25,9 @@
               placeholder="输入代码、名称搜索"
               @keyup.enter="search"
               style="max-width: 300px;"
+              data-testid="stock-search-input"
             />
-            <button class="btn btn-primary btn-sm px-4" type="button" @click="search">
+            <button class="btn btn-primary btn-sm px-4" type="button" @click="search" data-testid="stock-search-btn">
               查询
             </button>
           </div>
@@ -34,7 +35,7 @@
       </div>
 
       <div class="card-body p-1">
-        <div class="table-responsive">
+        <div class="table-responsive" data-testid="stock-table-container">
           <table class="table table-hover align-middle mb-0">
             <thead>
               <tr>
@@ -50,7 +51,7 @@
             <tbody>
               <template v-if="!loading">
                 <template v-if="stocks.length">
-                  <tr v-for="stock in stocks" :key="stock.id">
+                  <tr v-for="stock in stocks" :key="stock.id" :data-testid="'stock-row-' + stock.code">
                     <td class="text-center">
                       <span class="badge" :class="stock.market === 'HK' ? 'bg-danger' : 'bg-primary'">
                         {{ stock.market }}
@@ -63,10 +64,10 @@
                     <td>{{ formatDateTime(stock.price_updated_at) }}</td>
                     <td>
                       <div class="d-flex justify-content-end gap-1">
-                        <button class="btn btn-link btn-xs p-0 text-primary" title="编辑" @click="editStock(stock)">
+                        <button class="btn btn-link btn-xs p-0 text-primary" title="编辑" @click="editStock(stock)" :data-testid="'edit-stock-btn-' + stock.code">
                           编辑
                         </button>
-                        <button class="btn btn-link btn-xs p-0 text-danger ms-2" title="删除" @click="confirmDelete(stock)">
+                        <button class="btn btn-link btn-xs p-0 text-danger ms-2" title="删除" @click="confirmDelete(stock)" :data-testid="'delete-stock-btn-' + stock.code">
                           删除
                         </button>
                       </div>
@@ -97,7 +98,7 @@
           <nav>
             <ul class="pagination pagination-sm mb-0">
               <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)" title="上一页">
+                <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)" title="上一页" data-testid="prev-page-btn">
                   <i class="fas fa-chevron-left"></i>
                 </a>
               </li>
@@ -109,11 +110,11 @@
                   <span class="page-link">{{ page }}</span>
                 </template>
                 <template v-else>
-                  <a class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
+                  <a class="page-link" href="#" @click.prevent="changePage(page)" :data-testid="'page-btn-' + page">{{ page }}</a>
                 </template>
               </li>
               <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)" title="下一页">
+                <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)" title="下一页" data-testid="next-page-btn">
                   <i class="fas fa-chevron-right"></i>
                 </a>
               </li>
