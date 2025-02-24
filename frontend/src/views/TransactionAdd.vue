@@ -18,6 +18,7 @@
               @keydown="handleKeyNavigation($event, 'transaction_date')"
               :class="{ 'is-invalid': errors.transaction_date }"
               placeholder="YYYY-MM-DD"
+              :ref="el => inputRefs.transaction_date.value = el"
             />
             <div class="invalid-feedback">{{ errors.transaction_date }}</div>
           </div>
@@ -33,6 +34,7 @@
                 v-model="form.stock_code"
                 :ref="el => inputRefs.stock_code.value = el"
                 @input="handleStockCodeInput"
+                @blur="handleStockCodeBlur"
                 @keydown="handleKeyNavigation($event, 'stock_code')"
                 @keydown.down.prevent="navigateStockList('down')"
                 @keydown.up.prevent="navigateStockList('up')"
@@ -247,6 +249,92 @@
         </button>
       </div>
     </div>
+
+    <!-- 添加股票对话框 -->
+    <div class="modal fade" id="addStockModal" tabindex="-1" ref="addStockModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">添加新股票</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="submitNewStock">
+              <div class="mb-3">
+                <label class="form-label">股票代码</label>
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  v-model="newStock.code"
+                  :class="{ 'is-invalid': errors.code }"
+                  placeholder="输入股票代码后将自动查询股票信息"
+                  @keydown.enter.prevent="handleNewStockCodeEnter"
+                  @keydown.tab.prevent="handleNewStockCodeEnter"
+                />
+                <div class="invalid-feedback">{{ errors.code }}</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">市场</label>
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  v-model="newStock.market"
+                  :class="{ 'is-invalid': errors.market }"
+                  readonly
+                />
+                <div class="invalid-feedback">{{ errors.market }}</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">股票名称</label>
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  v-model="newStock.name"
+                  :class="{ 'is-invalid': errors.name }"
+                  readonly
+                />
+                <div class="invalid-feedback">{{ errors.name }}</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">谷歌查询代码</label>
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  v-model="newStock.google_code"
+                  readonly
+                />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">当前股价</label>
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  :value="newStock.current_price"
+                  readonly
+                />
+                <div v-if="newStock.alertMessage" :class="{ 
+                    'text-danger': newStock.alertMessage.includes('已存在'), 
+                    'text-primary': newStock.alertMessage.includes('查询失败')
+                  }">
+                  {{ newStock.alertMessage }}
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-primary" @click="submitNewStock" :disabled="submittingStock">
+              <span v-if="submittingStock" class="spinner-border spinner-border-sm me-1"></span>
+              确认添加
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -257,6 +345,7 @@ import StockSelector from '../components/StockSelector.vue'
 import axios from 'axios'
 import useMessage from '../composables/useMessage'
 import { debounce } from 'lodash'
+import { Modal } from 'bootstrap'
 
 const router = useRouter()
 const message = useMessage()
@@ -305,6 +394,18 @@ const inputRefs = {
 const showStockList = ref(false)
 const filteredStocks = ref([])
 const currentStockIndex = ref(-1)
+
+// 新增股票相关的状态
+const addStockModal = ref(null)
+const newStock = ref({
+  market: 'HK',
+  code: '',
+  name: '',
+  full_name: '',
+  current_price: null,
+  alertMessage: ''
+})
+const submittingStock = ref(false)
 
 // 方法
 const addDetail = () => {
@@ -530,15 +631,17 @@ const submitForm = async () => {
     const response = await axios.post('/api/stock/transactions', submitData)
 
     if (response.data.success) {
-      message.success('交易记录添加成功')
       if (saveAndAddNext.value) {
         resetForm()
         saveAndAddNext.value = false
-        // 将焦点设置到交易日期输入框
-        nextTick(() => {
-          inputRefs.transaction_date.value?.focus()
-        })
+        message.success('交易记录添加成功')
+        // 等待 DOM 更新后再设置焦点
+        await nextTick()
+        if (inputRefs.transaction_date.value) {
+          inputRefs.transaction_date.value.focus()
+        }
       } else {
+        message.success('交易记录添加成功')
         router.push('/transactions')
       }
     } else {
@@ -620,6 +723,18 @@ onMounted(() => {
   });
 
   document.addEventListener('click', handleClickOutside)
+
+  // 添加对话框关闭时的处理
+  addStockModal.value?.addEventListener('hidden.bs.modal', () => {
+    newStock.value = {
+      market: 'HK',
+      code: '',
+      name: '',
+      full_name: '',
+      current_price: null,
+      alertMessage: ''
+    }
+  })
 });
 
 onBeforeUnmount(() => {
@@ -836,6 +951,240 @@ const closeStockList = () => {
 const handleClickOutside = (event) => {
   if (!event.target.closest('.position-relative')) {
     closeStockList()
+  }
+}
+
+// 处理股票代码输入框失去焦点
+const handleStockCodeBlur = async (event) => {
+  const code = form.value.stock_code.trim()
+  if (!code) return
+
+  try {
+    const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(code)}`)
+    if (response.data.success && Array.isArray(response.data.data)) {
+      const exactMatch = response.data.data.find(stock => stock.code === code)
+      if (!exactMatch) {
+        // 没有找到匹配的股票，显示添加股票对话框
+        newStock.value = {
+          market: form.value.market,
+          code: code,
+          name: '',
+          full_name: '',
+          current_price: null,
+          alertMessage: ''
+        }
+        const modal = new Modal(addStockModal.value)
+        modal.show()
+      }
+    }
+  } catch (error) {
+    console.error('搜索股票失败:', error)
+    message.error('搜索股票失败，请重试')
+  }
+}
+
+// 添加股票代码格式化函数
+const formatStockCode = (code, market = '') => {
+  // 如果是港股市场，进行数字格式化
+  if (market === 'HK' || market.includes('HKG')) {
+    // 移除所有非数字字符
+    const numericCode = code.replace(/\D/g, '')
+    // 统一补齐4位
+    return numericCode.padStart(4, '0')
+  }
+  // 非港股市场，保持原样
+  return code.trim()
+}
+
+// 处理股票代码回车和Tab事件
+const handleNewStockCodeEnter = async (event) => {
+  event.preventDefault()
+  if (!newStock.value.code) {
+    return
+  }
+  
+  errors.value = {}
+  
+  let queryCode = newStock.value.code.trim()
+  
+  try {
+    // 先查询价格获取市场信息
+    const response = await axios.get(`/api/stock/check_price?code=${queryCode}`)
+    
+    if (response.data.success && response.data.data.price) {
+      const data = response.data.data
+      
+      // 根据市场格式化股票代码
+      const formattedCode = formatStockCode(queryCode, data.market)
+      
+      // 检查是否已存在
+      const checkResponse = await axios.get('/api/stock/stocks', {
+        params: {
+          search: formattedCode
+        }
+      })
+      
+      if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
+        const existingStock = checkResponse.data.data.items.find(
+          stock => stock.code === formattedCode
+        )
+        if (existingStock) {
+          message.warning('该股票代码已存在')
+          resetFormExceptCode()
+          const codeInput = document.querySelector('.modal-body input[type="text"]')
+          if (codeInput) {
+            codeInput.focus()
+          }
+          return
+        }
+      }
+
+      // 更新表单数据
+      newStock.value.current_price = data.price
+      newStock.value.google_code = data.google_code
+      newStock.value.name = data.name || ''
+      newStock.value.market = data.market
+      newStock.value.code = formattedCode
+      
+      if (!newStock.value.name) {
+        errors.value.name = '未能获取公司名称'
+      }
+      
+      // 将焦点设置到确认添加按钮
+      const submitButton = document.querySelector('.modal-footer .btn-primary')
+      if (submitButton) {
+        submitButton.focus()
+      }
+    } else {
+      message.error('查询失败，请检查股票代码是否正确')
+      resetFormExceptCode()
+      const codeInput = document.querySelector('.modal-body input[type="text"]')
+      if (codeInput) {
+        codeInput.focus()
+      }
+    }
+  } catch (error) {
+    message.error('查询失败，请检查股票代码是否正确')
+    resetFormExceptCode()
+    const codeInput = document.querySelector('.modal-body input[type="text"]')
+    if (codeInput) {
+      codeInput.focus()
+    }
+  }
+}
+
+// 重置表单（除了股票代码）
+const resetFormExceptCode = () => {
+  const currentCode = newStock.value.code
+  newStock.value = {
+    market: '',
+    code: currentCode,
+    name: '',
+    google_code: '',
+    current_price: null,
+    alertMessage: ''
+  }
+  errors.value = {}
+}
+
+// 提交新股票
+const submitNewStock = async () => {
+  if (submittingStock.value) return
+
+  // 表单验证
+  errors.value = {}
+  let isValid = true
+
+  if (!newStock.value.code) {
+    errors.value.code = '请输入股票代码'
+    isValid = false
+  }
+  if (!newStock.value.market) {
+    errors.value.market = '无法确定股票市场'
+    isValid = false
+  }
+  if (!newStock.value.name) {
+    errors.value.name = '未能获取股票名称'
+    isValid = false
+  }
+  if (!newStock.value.current_price) {
+    errors.value.code = '未能获取股票价格，请确认股票代码是否正确'
+    isValid = false
+  }
+
+  // 检查股票代码格式
+  if (newStock.value.code) {
+    if (newStock.value.market === 'HK' && !/^\d{1,4}$/.test(newStock.value.code)) {
+      errors.value.code = '港股代码必须为1-4位数字'
+      isValid = false
+    } else if (newStock.value.market === 'USA' && !/^[A-Za-z]{1,5}$/.test(newStock.value.code)) {
+      errors.value.code = '美股代码必须为1-5位字母'
+      isValid = false
+    }
+  }
+
+  if (!isValid) return
+  
+  try {
+    submittingStock.value = true
+    
+    // 再次检查股票是否已存在
+    const formattedCode = formatStockCode(newStock.value.code, newStock.value.market)
+    const checkResponse = await axios.get('/api/stock/stocks', {
+      params: {
+        search: formattedCode
+      }
+    })
+    
+    if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
+      const existingStock = checkResponse.data.data.items.find(
+        stock => stock.code === formattedCode
+      )
+      if (existingStock) {
+        message.warning('该股票代码已存在')
+        newStock.value.current_price = null
+        submittingStock.value = false
+        return
+      }
+    }
+
+    const stock = {
+      code: formattedCode,
+      market: newStock.value.market,
+      name: newStock.value.name,
+      full_name: newStock.value.name,
+      currency: newStock.value.market === 'HK' ? 'HKD' : 'USD'
+    }
+    
+    const response = await axios.post('/api/stock/stocks', stock)
+    
+    if (response.data.success) {
+      message.success('股票添加成功')
+      // 更新表单数据
+      form.value.stock_code = newStock.value.code
+      form.value.stock_name = newStock.value.name
+      form.value.market = newStock.value.market
+      // 关闭对话框
+      const modal = Modal.getInstance(addStockModal.value)
+      modal.hide()
+      // 清空新股票表单
+      newStock.value = {
+        market: 'HK',
+        code: '',
+        name: '',
+        full_name: '',
+        current_price: null,
+        alertMessage: ''
+      }
+    } else {
+      message.error(response.data.message || '添加股票失败')
+      newStock.value.current_price = null
+    }
+  } catch (error) {
+    message.error(error.response?.data?.message || error.message || '添加股票失败，请重试')
+    newStock.value.current_price = null
+  } finally {
+    submittingStock.value = false
   }
 }
 </script>
@@ -1055,5 +1404,21 @@ const handleClickOutside = (event) => {
 
 .stock-item.active:hover {
   background-color: #c0c5cb;
+}
+
+/* 添加对话框相关样式 */
+.modal-body {
+  padding: 1rem;
+}
+
+.modal-footer {
+  padding: 0.75rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
 }
 </style> 

@@ -122,10 +122,12 @@ def process_transactions(transactions):
                 market_stats[market]['transaction_count'] += trans['transaction_count']
                 market_stats[market]['total_sell'] += trans['total_amount']
                 market_stats[market]['total_fees'] += trans['total_fees']
-            
-            # 计算已实现盈亏
-            realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
-            stock_stats[stock_key]['realized_profit'] += realized_profit
+                
+                # 计算卖出时的已实现盈亏
+                # 卖出收入 - 买入成本 - 相关费用
+                realized_profit = total_amount - (total_quantity * prev_avg_cost) - total_fees
+                stock_stats[stock_key]['realized_profit'] += realized_profit
+                market_stats[market]['realized_profit'] += realized_profit
             
             transaction_details[stock_key].append(trans)
         
