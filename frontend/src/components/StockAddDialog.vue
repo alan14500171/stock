@@ -359,17 +359,16 @@ const handleSubmit = async () => {
       }
     } else {
       // 添加模式
-      // 再次检查股票是否已存在
-      const formattedCode = formatStockCode(form.value.code, form.value.market)
+      // 直接使用原始代码，不进行格式化
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
-          search: formattedCode
+          search: form.value.code
         }
       })
       
       if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
         const existingStock = checkResponse.data.data.items.find(
-          stock => stock.code === formattedCode
+          stock => stock.code === form.value.code
         )
         if (existingStock) {
           message.warning('该股票代码已存在')
@@ -380,7 +379,7 @@ const handleSubmit = async () => {
       }
 
       const stock = {
-        code: formattedCode,
+        code: form.value.code,
         market: form.value.market,
         code_name: form.value.name,
         google_name: form.value.google_code,
