@@ -71,7 +71,7 @@ def get_transactions():
                 t.transaction_date,
                 t.market,
                 t.stock_code,
-                s.name as stock_name,
+                s.code_name as stock_name,
                 t.transaction_code,
                 t.transaction_type,
                 t.total_quantity,
@@ -809,7 +809,7 @@ def get_stocks():
             params.append(market)
             
         if search:
-            sql += " AND (code LIKE %s OR name LIKE %s)"
+            sql += " AND (code LIKE %s OR code_name LIKE %s)"
             search_pattern = f'%{search}%'
             params.extend([search_pattern, search_pattern])
             
@@ -852,8 +852,8 @@ def add_stock():
         stock = Stock({
             'code': data['code'],
             'market': data['market'],
-            'name': data['name'],
-            'full_name': data.get('full_name'),
+            'code_name': data['code_name'],
+            'google_name': data.get('google_name'),
             'industry': data.get('industry'),
             'currency': data.get('currency')
         })
@@ -896,8 +896,8 @@ def edit_stock(id):
         stock = Stock(stock_data)
         stock.code = data['code']
         stock.market = data['market']
-        stock.name = data['name']
-        stock.full_name = data.get('full_name')
+        stock.code_name = data['code_name']
+        stock.google_name = data.get('google_name')
         stock.industry = data.get('industry')
         stock.currency = data.get('currency')
         

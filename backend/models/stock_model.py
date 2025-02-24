@@ -10,8 +10,8 @@ class Stock:
         self.id = data.get('id') if data else None
         self.code = data.get('code') if data else None
         self.market = data.get('market') if data else None
-        self.name = data.get('name') if data else None
-        self.full_name = data.get('full_name') if data else None
+        self.code_name = data.get('code_name') if data else None
+        self.google_name = data.get('google_name') if data else None
         self.created_at = data.get('created_at') if data else datetime.utcnow()
         self.updated_at = data.get('updated_at') if data else datetime.utcnow()
     
@@ -22,27 +22,27 @@ class Stock:
                 # 更新
                 sql = """
                     UPDATE stock.stocks 
-                    SET code = %s, market = %s, name = %s, 
-                        full_name = %s, updated_at = NOW()
+                    SET code = %s, market = %s, code_name = %s, 
+                        google_name = %s, updated_at = NOW()
                     WHERE id = %s
                 """
                 params = [
-                    self.code, self.market, self.name,
-                    self.full_name, self.id
+                    self.code, self.market, self.code_name,
+                    self.google_name, self.id
                 ]
             else:
                 # 新增
                 sql = """
                     INSERT INTO stock.stocks (
-                        code, market, name, full_name, 
+                        code, market, code_name, google_name, 
                         created_at, updated_at
                     ) VALUES (
                         %s, %s, %s, %s, NOW(), NOW()
                     )
                 """
                 params = [
-                    self.code, self.market, self.name,
-                    self.full_name
+                    self.code, self.market, self.code_name,
+                    self.google_name
                 ]
             
             return db.execute(sql, params)
@@ -56,8 +56,8 @@ class Stock:
             'id': self.id,
             'code': self.code,
             'market': self.market,
-            'name': self.name,
-            'full_name': self.full_name,
+            'code_name': self.code_name,
+            'google_name': self.google_name,
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at
         }

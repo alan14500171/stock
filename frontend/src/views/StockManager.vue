@@ -57,8 +57,8 @@
                       </span>
                     </td>
                     <td class="font-monospace">{{ stock.code }}</td>
-                    <td>{{ stock.name }}</td>
-                    <td>{{ stock.full_name || '-' }}</td>
+                    <td>{{ stock.code_name }}</td>
+                    <td>{{ stock.google_name || '-' }}</td>
                     <td>{{ formatPrice(stock.current_price, stock.market) }}</td>
                     <td>{{ formatDateTime(stock.price_updated_at) }}</td>
                     <td>
@@ -214,7 +214,7 @@ const resetSearch = () => {
 
 // 删除股票
 const confirmDelete = async (stock) => {
-  if (!confirm(`确定要删除股票 ${stock.code} - ${stock.name} 吗？`)) return
+  if (!confirm(`确定要删除股票 ${stock.code} - ${stock.code_name} 吗？`)) return
   
   try {
     const response = await axios.delete(`/api/stock/stocks/${stock.id}`)
