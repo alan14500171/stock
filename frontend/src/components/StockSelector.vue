@@ -1,15 +1,15 @@
 <template>
   <div class="stock-selector" data-testid="stock-selector-container">
-    <div class="selected-items form-control" @click="showDropdown = !showDropdown">
-      <div v-for="code in modelValue" :key="code" class="selected-tag">
+    <div class="selected-items form-control" data-testid="selected-items-container" @click="showDropdown = !showDropdown">
+      <div v-for="code in modelValue" :key="code" class="selected-tag" :data-testid="'selected-tag-' + code">
         {{ getStockLabel(code) }}
-        <button type="button" class="btn-close" @click.stop="removeStock(code)"></button>
+        <button type="button" class="btn-close" @click.stop="removeStock(code)" :data-testid="'remove-stock-btn-' + code"></button>
       </div>
-      <small v-if="modelValue.length === 0" class="text-muted">{{ placeholder }}</small>
+      <small v-if="modelValue.length === 0" class="text-muted" data-testid="empty-placeholder">{{ placeholder }}</small>
     </div>
-    <div class="dropdown-menu" :class="{ show: showDropdown }">
+    <div class="dropdown-menu" :class="{ show: showDropdown }" data-testid="dropdown-menu">
       <!-- 搜索框 -->
-      <div class="search-container">
+      <div class="search-container" data-testid="search-container">
         <input
           type="text"
           class="search-input"
@@ -26,7 +26,7 @@
       </div>
 
       <!-- 全选/取消全选和清空选择 -->
-      <div class="dropdown-header d-flex justify-content-between align-items-center">
+      <div class="dropdown-header d-flex justify-content-between align-items-center" data-testid="dropdown-header">
         <div class="select-all">
           <input 
             type="checkbox" 
@@ -34,16 +34,18 @@
             :checked="isAllSelected"
             @change="toggleSelectAll"
             :indeterminate="isIndeterminate"
+            data-testid="select-all-checkbox"
           >
-          <span>全选</span>
+          <span data-testid="select-all-text">全选</span>
         </div>
         <div class="d-flex align-items-center gap-3">
-          <small class="text-muted">已选 {{ modelValue.length }} 项</small>
+          <small class="text-muted" data-testid="selected-count">已选 {{ modelValue.length }} 项</small>
           <button 
             v-if="modelValue.length > 0"
             type="button" 
             class="btn btn-link btn-sm p-0 text-danger" 
             @click="clearSelected"
+            data-testid="clear-selected-btn"
           >
             清空选择
           </button>
@@ -51,7 +53,7 @@
       </div>
 
       <!-- 股票列表 -->
-      <div class="stock-list">
+      <div class="stock-list" data-testid="stock-list">
         <template v-if="filteredStocks.length > 0">
           <a
             v-for="(stock, index) in filteredStocks"
@@ -67,11 +69,13 @@
               type="checkbox" 
               class="form-check-input me-2" 
               :checked="isSelected(stock.code)"
+              :data-testid="'stock-checkbox-' + stock.code"
             >
-            {{ stock.code }} - {{ stock.name }}
+            <span :data-testid="'stock-code-' + stock.code">{{ stock.code }}</span> - 
+            <span :data-testid="'stock-name-' + stock.code">{{ stock.name }}</span>
           </a>
         </template>
-        <div v-else class="dropdown-item text-muted">
+        <div v-else class="dropdown-item text-muted" data-testid="no-results">
           无匹配结果
         </div>
       </div>

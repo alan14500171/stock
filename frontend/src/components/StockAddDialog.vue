@@ -1,16 +1,16 @@
 <template>
   <div v-if="modelValue">
-    <div class="modal fade" :class="{ show: modelValue }" tabindex="-1">
+    <div class="modal fade" :class="{ show: modelValue }" tabindex="-1" data-testid="stock-add-dialog">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
-            <button type="button" class="btn-close" @click="handleClose"></button>
+            <h5 class="modal-title" data-testid="dialog-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
+            <button type="button" class="btn-close" @click="handleClose" data-testid="close-btn"></button>
           </div>
           <div class="modal-body">
             <form @submit.prevent="handleSubmit">
               <div class="mb-3">
-                <label class="form-label">股票代码</label>
+                <label class="form-label" data-testid="stock-code-label">股票代码</label>
                 <input 
                   type="text" 
                   class="form-control" 
@@ -20,68 +20,76 @@
                   @keydown.enter.prevent="handleCodeEnter"
                   @keydown.tab.prevent="handleCodeEnter"
                   :readonly="!!editData"
+                  data-testid="stock-code-input"
                 />
-                <div class="invalid-feedback">{{ errors.code }}</div>
+                <div class="invalid-feedback" data-testid="stock-code-error">{{ errors.code }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">市场</label>
+                <label class="form-label" data-testid="stock-market-label">市场</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="form.market"
                   :class="{ 'is-invalid': errors.market }"
                   :readonly="true"
+                  data-testid="stock-market-input"
                 />
-                <div class="invalid-feedback">{{ errors.market }}</div>
+                <div class="invalid-feedback" data-testid="stock-market-error">{{ errors.market }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">股票名称</label>
+                <label class="form-label" data-testid="stock-name-label">股票名称</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="form.name"
                   :class="{ 'is-invalid': errors.name }"
                   :readonly="!editData"
+                  data-testid="stock-name-input"
                 />
-                <div class="invalid-feedback">{{ errors.name }}</div>
+                <div class="invalid-feedback" data-testid="stock-name-error">{{ errors.name }}</div>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">谷歌查询代码</label>
+                <label class="form-label" data-testid="google-code-label">谷歌查询代码</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   v-model="form.google_code"
                   :readonly="!editData"
+                  data-testid="google-code-input"
                 />
               </div>
 
               <div class="mb-3">
-                <label class="form-label">当前股价</label>
+                <label class="form-label" data-testid="current-price-label">当前股价</label>
                 <input 
                   type="text" 
                   class="form-control" 
                   :value="form.current_price"
                   readonly
+                  data-testid="current-price-input"
                 />
                 <div v-if="alertMessage" :class="{ 
                     'text-danger': alertMessage.includes('已存在'), 
                     'text-primary': alertMessage.includes('查询失败')
-                  }">
+                  }"
+                  data-testid="alert-message"
+                >
                   {{ alertMessage }}
                 </div>
               </div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="handleClose">取消</button>
+            <button type="button" class="btn btn-secondary" @click="handleClose" data-testid="cancel-btn">取消</button>
             <button 
               type="button" 
               class="btn btn-primary" 
               @click="handleSubmit"
               :disabled="submitting"
+              data-testid="submit-btn"
             >
               <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
               {{ editData ? '保存修改' : '确认添加' }}
@@ -90,7 +98,7 @@
         </div>
       </div>
     </div>
-    <div class="modal-backdrop fade show"></div>
+    <div class="modal-backdrop fade show" data-testid="modal-backdrop"></div>
   </div>
 </template>
 
