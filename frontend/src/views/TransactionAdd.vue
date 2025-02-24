@@ -307,6 +307,28 @@ const handleDateInput = (event) => {
 }
 
 const handleDateBlur = () => {
+  const input = form.value.transaction_date
+  if (!input) return handleDateBlurChange()
+
+  // 处理简单数字输入
+  if (/^\d{1,2}$/.test(input)) {
+    // 如果输入1-31的数字，自动补充为当前年月
+    const day = input.padStart(2, '0')
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = (today.getMonth() + 1).toString().padStart(2, '0')
+    form.value.transaction_date = `${year}-${month}-${day}`
+  } else if (/^\d{1,2}-\d{1,2}$/.test(input)) {
+    // 如果输入月-日格式，自动补充年份
+    const [month, day] = input.split('-').map(num => num.padStart(2, '0'))
+    const year = new Date().getFullYear()
+    form.value.transaction_date = `${year}-${month}-${day}`
+  } else if (/^\d{1,2}-\d{1,2}-\d{2}$/.test(input)) {
+    // 如果输入月-日-年格式（两位年份），自动补充为20xx
+    const [month, day, shortYear] = input.split('-').map(num => num.padStart(2, '0'))
+    form.value.transaction_date = `20${shortYear}-${month}-${day}`
+  }
+
   handleDateBlurChange()
 }
 
