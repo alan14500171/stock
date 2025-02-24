@@ -273,11 +273,11 @@ const form = ref({
   transaction_code: '',
   transaction_type: '',
   details: [{ quantity: null, price: null }],
-  broker_fee:  '',
-  transaction_levy:  '',
-  stamp_duty:  '',
-  trading_fee:  '',
-  deposit_fee:  '',
+  broker_fee: '',
+  transaction_levy: '',
+  stamp_duty: '',
+  trading_fee: '',
+  deposit_fee: '',
   market: 'HK'
 })
 
@@ -418,7 +418,7 @@ const validateForm = () => {
 // 监听交易类型变化，但不自动计算印花税
 watch(() => form.value.transaction_type, () => {
   if (form.value.transaction_type === 'buy') {
-    form.value.stamp_duty = 0
+    form.value.stamp_duty = ''
   }
 })
 
@@ -536,11 +536,11 @@ const resetForm = () => {
     transaction_code: '',
     transaction_type: '',
     details: [{ quantity: null, price: null }],
-    broker_fee: 0,
-    transaction_levy: 0,
-    stamp_duty: 0,
-    trading_fee: 0,
-    deposit_fee: 0,
+    broker_fee: '',
+    transaction_levy: '',
+    stamp_duty: '',
+    trading_fee: '',
+    deposit_fee: '',
     market: 'HK'
   }
   errors.value = {}
