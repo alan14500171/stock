@@ -30,13 +30,8 @@ class CurrencyChecker:
         :return: 股票价格或 None
         """
         try:
-            # 添加时间戳参数避免缓存
             timestamp = int(datetime.now().timestamp() * 1000)
             url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
-            
-            logger.info("="*50)
-            logger.info(f"Google Finance 查询 URL: {url}")
-            logger.info("="*50)
             
             headers = CurrencyChecker.HEADERS.copy()
             headers.update({
@@ -46,22 +41,14 @@ class CurrencyChecker:
                 'If-Modified-Since': ''
             })
             
-            logger.info(f"开始发送请求...")
             response = requests.get(url, headers=headers, timeout=10)
-            logger.info(f"收到响应，状态码: {response.status_code}")
             response.raise_for_status()
             
-            logger.info("开始解析页面...")
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            logger.info("开始提取价格...")
             result = CurrencyChecker._extract_price(soup)
             
             if result and result['price']:
-                logger.info(f"成功获取股票 {query} 价格: {result['price']}")
                 return result['price']
-            
-            logger.warning(f"未能获取股票 {query} 价格")
             return None
             
         except Exception as e:
@@ -75,26 +62,13 @@ class CurrencyChecker:
         :param code: 股票代码
         :return: 包含市场和价格信息的字典列表
         """
-        logger.info("\n" + "="*80)
-        logger.info(f"开始搜索股票代码: {code}")
-        logger.info("="*80)
-        
         results = []
         for market, exchange in CurrencyChecker.MARKETS.items():
             try:
-                # 添加时间戳参数避免缓存
                 timestamp = int(datetime.now().timestamp() * 1000)
                 query = f"{code}:{exchange}"
                 url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
                 
-                logger.info("\n" + "-"*50)
-                logger.info(f"市场: {market}")
-                logger.info(f"交易所: {exchange}")
-                logger.info(f"查询字符串: {query}")
-                logger.info(f"完整 URL: {url}")
-                logger.info("-"*50)
-                
-                # 使用与 get_stock_price 相同的请求方式
                 headers = CurrencyChecker.HEADERS.copy()
                 headers.update({
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -103,23 +77,14 @@ class CurrencyChecker:
                     'If-Modified-Since': ''
                 })
                 
-                logger.info(f"开始发送请求...")
                 response = requests.get(url, headers=headers, timeout=10)
-                logger.info(f"收到响应，状态码: {response.status_code}")
                 response.raise_for_status()
                 
-                logger.info("开始解析页面...")
                 soup = BeautifulSoup(response.text, 'html.parser')
-                
-                logger.info("开始提取价格...")
                 result = CurrencyChecker._extract_price(soup)
                 
                 if result and result['price']:
                     price = result['price']
-                    logger.info(f"✓ 成功：在市场 {market} 找到股票")
-                    logger.info(f"  - 当前价格: {price}")
-                    
-                    # 提取股票名称
                     name_element = soup.find('div', {'class': 'zzDege'})
                     stock_name = name_element.text if name_element else code
                     
@@ -131,29 +96,10 @@ class CurrencyChecker:
                         'name': stock_name,
                         'code': code
                     })
-                else:
-                    logger.info(f"✗ 失败：市场 {market} 未找到股票")
             except Exception as e:
-                logger.error(f"✗ 错误：搜索市场 {market} 时发生错误")
-                logger.error(f"  - 错误详情: {str(e)}")
+                logger.error(f"搜索市场 {market} 时发生错误: {str(e)}")
                 continue
                 
-        if results:
-            logger.info("\n" + "="*50)
-            logger.info(f"搜索完成，共找到 {len(results)} 个匹配结果:")
-            for idx, result in enumerate(results, 1):
-                logger.info(f"\n结果 {idx}:")
-                logger.info(f"  市场: {result['market']}")
-                logger.info(f"  交易所: {result['exchange']}")
-                logger.info(f"  股票名称: {result['name']}")
-                logger.info(f"  价格: {result['price']}")
-                logger.info(f"  完整 URL: https://www.google.com/finance/quote/{result['query']}")
-            logger.info("="*50 + "\n")
-        else:
-            logger.warning("\n" + "="*50)
-            logger.warning(f"未在任何市场找到股票 {code}")
-            logger.warning("="*50 + "\n")
-            
         return results
 
     @staticmethod
@@ -166,8 +112,6 @@ class CurrencyChecker:
         """
         try:
             url = f'https://www.google.com/finance/quote/{from_currency}-{to_currency}'
-            logger.info(f"查询汇率 URL: {url}")
-            
             response = requests.get(url, headers=CurrencyChecker.HEADERS, timeout=10)
             response.raise_for_status()
             
@@ -175,7 +119,6 @@ class CurrencyChecker:
             result = CurrencyChecker._extract_price(soup)
             
             if result and result['price']:
-                logger.info(f"获取汇率 {from_currency}/{to_currency}: {result['price']}")
                 return result['price']
             return None
             
@@ -186,12 +129,10 @@ class CurrencyChecker:
     @staticmethod
     def _check_price_exists(soup):
         """检查页面中是否存在价格元素"""
-        # 检查主要价格元素
         price_div = soup.find('div', {'class': 'YMlKec fxKbKc'})
         if price_div:
             return True
             
-        # 检查备用价格元素
         price_span = soup.find('div', {'data-last-price': True})
         if price_span and price_span.get('data-last-price'):
             return True
@@ -203,15 +144,8 @@ class CurrencyChecker:
         """查找页面中所有可能包含价格的元素"""
         price_elements = []
         
-        # 查找所有 div 和 span 元素
         for element in soup.find_all(['div', 'span']):
-            # 获取元素的 class 属性
             classes = element.get('class', [])
-            if classes:
-                class_str = ' '.join(classes)
-                logger.info(f"找到元素: {element.name}, class: {class_str}, text: {element.text.strip()}")
-            
-            # 检查是否包含价格相关的文本
             text = element.text.strip()
             if text and (text[0].isdigit() or text.startswith('$') or text.startswith('HK$')):
                 price_elements.append({
@@ -226,7 +160,6 @@ class CurrencyChecker:
     def _extract_price(soup):
         """从页面提取价格"""
         try:
-            # 1. 首先尝试使用 data-last-price 属性（最准确的方式）
             price_div = soup.find('div', {'data-last-price': True})
             if price_div and price_div.get('data-last-price'):
                 try:
@@ -236,17 +169,13 @@ class CurrencyChecker:
                 except (ValueError, TypeError) as e:
                     logger.error(f"解析 data-last-price 属性时出错: {e}")
 
-            # 2. 尝试查找主要价格元素
             price_element = soup.find('div', {'class': ['YMlKec', 'fxKbKc']})
             if price_element and price_element.parent:
                 parent_classes = price_element.parent.get('class', [])
                 if 'P6K39c' in parent_classes:
                     price_text = price_element.text.strip()
-                    
-                    # 移除货币符号和逗号
                     price_text = price_text.replace('$', '').replace(',', '').replace('HK$', '')
                     
-                    # 如果包含空格（例如有额外的涨跌信息），只取第一个数字
                     if ' ' in price_text:
                         price_text = price_text.split()[0]
                     
@@ -257,7 +186,6 @@ class CurrencyChecker:
                     except (ValueError, TypeError) as e:
                         logger.error(f"解析主要价格文本时出错: {e}")
 
-            logger.error("未找到有效的价格元素")
             return {'price': None}
 
         except Exception as e:
@@ -273,7 +201,6 @@ class CurrencyChecker:
         :return: 该日期的汇率值或股票价格，或 None
         """
         try:
-            # 确保日期格式正确
             if isinstance(date, str):
                 target_date = datetime.strptime(date, '%Y-%m-%d')
             elif isinstance(date, datetime):
@@ -281,27 +208,16 @@ class CurrencyChecker:
             else:
                 raise ValueError("日期格式不正确")
 
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
-            }
-
-            # 构建URL
-            if '/' in currency_pair:  # 汇率查询
+            if '/' in currency_pair:
                 from_currency, to_currency = currency_pair.split('/')
                 url = f'https://www.google.com/finance/quote/{from_currency}-{to_currency}?window=1Y'
-            else:  # 股票查询
+            else:
                 url = f'https://www.google.com/finance/quote/{currency_pair}?window=1Y'
 
-            logger.info(f"访问历史数据URL: {url}")
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=CurrencyChecker.HEADERS, timeout=10)
             response.raise_for_status()
 
-            # 尝试从页面提取历史数据
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 查找包含历史数据的脚本标签
             scripts = soup.find_all('script')
             data_pattern = re.compile(r'window.google.finance.data\s*=\s*({.*?});', re.DOTALL)
             
@@ -318,20 +234,16 @@ class CurrencyChecker:
                             if 'lines' in data and len(data['lines']) > 0:
                                 points = data['lines'][0].get('points', [])
                                 
-                                # 查找目标日期的数据
                                 for point in points:
                                     point_date = datetime.fromtimestamp(point[0]/1000).strftime('%Y-%m-%d')
                                     if point_date == target_date_str:
                                         historical_data = point[1]
-                                        logger.info(f"找到历史数据: {target_date_str} = {historical_data}")
                                         return historical_data
                                 
                         except json.JSONDecodeError:
                             continue
 
-            if historical_data is None:
-                logger.error(f"未找到 {target_date_str} 的历史数据")
-                return None
+            return None
 
         except Exception as e:
             logger.error(f'获取历史数据时出错: {str(e)}')
