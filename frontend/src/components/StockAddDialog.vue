@@ -196,14 +196,12 @@ const handleCodeEnter = async (event) => {
       // 更新表单数据,保持原始代码
       form.value.current_price = stockData.price
       form.value.google_code = stockData.query
-      form.value.code_name = stockData.code_name || ''
+      form.value.code_name = stockData.code_name || stockData.name || ''
       form.value.market = stockData.market
       
       if (form.value.code_name) {
         stockSelected.value = true
-      }
-      
-      if (!form.value.code_name) {
+      } else {
         errors.value.code_name = '未能获取公司名称'
       }
     } else {
@@ -249,14 +247,17 @@ const validateForm = () => {
     errors.value.code = '请输入股票代码'
     isValid = false
   }
+
   if (!form.value.market || !form.value.market.trim()) {
-    errors.value.market = '请选择股票市场'
+    errors.value.market = '请选择市场'
     isValid = false
   }
+
   if (!form.value.code_name || !form.value.code_name.trim()) {
     errors.value.code_name = '请输入股票名称'
     isValid = false
   }
+
   if (!form.value.google_code || !form.value.google_code.trim()) {
     errors.value.google_code = '请输入谷歌查询代码'
     isValid = false
@@ -290,10 +291,18 @@ watch(() => props.editData, (newData) => {
 
 // 修改提交表单方法
 const handleSubmit = async () => {
+  if (!validateForm() || submitting.value) return
+  
   try {
-    if (!validateForm() || submitting.value) return
-
     submitting.value = true
+    
+    // 检查并记录表单数据
+    console.log('提交前的表单数据:', form.value)
+    
+    // 确保所有必要字段都存在且不为空
+    if (!form.value.code_name || !form.value.code_name.trim()) {
+      throw new Error('股票名称不能为空')
+    }
     
     const stock = {
       code: form.value.code.trim(),
@@ -303,31 +312,25 @@ const handleSubmit = async () => {
       currency: form.value.market === 'HK' ? 'HKD' : 'USD'
     }
     
-    if (props.editData) {
-      const response = await axios.put(`/api/stock/stocks/${props.editData.id}`, stock)
-      
-      if (response.data.success) {
-        message.success('股票更新成功')
-        emit('success', response.data.data)
-        handleClose()
-      } else {
-        throw new Error(response.data.message || '更新股票失败')
-      }
+    // 打印提交的数据，方便调试
+    console.log('提交的股票数据:', stock)
+    
+    const url = props.editData ? `/api/stock/stocks/${props.editData.id}` : '/api/stock/stocks'
+    const method = props.editData ? 'put' : 'post'
+    
+    const response = await axios[method](url, stock)
+    
+    if (response.data.success) {
+      message.success(props.editData ? '股票更新成功' : '股票添加成功')
+      emit('success')
+      handleClose()
     } else {
-      const response = await axios.post('/api/stock/stocks', stock)
-      
-      if (response.data.success) {
-        message.success('股票添加成功')
-        emit('success', response.data.data)
-        handleClose()
-      } else {
-        throw new Error(response.data.message || '添加股票失败')
-      }
+      throw new Error(response.data.message || '操作失败')
     }
   } catch (error) {
-    const errorMsg = error.response?.data?.message || error.message || (props.editData ? '更新失败' : '添加失败')
-    message.error(errorMsg + '，请稍后重试')
-    errors.value.code = errorMsg
+    console.error('提交失败:', error)
+    message.error(error.message || '操作失败，请重试')
+    errors.value.code_name = error.message
   } finally {
     submitting.value = false
   }

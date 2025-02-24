@@ -1185,13 +1185,17 @@ const submitNewStock = async () => {
       }
     }
 
+    // 修改提交的数据结构，确保字段名称与后端一致
     const stock = {
       code: newStock.value.code,
       market: newStock.value.market,
-      name: newStock.value.name,
-      full_name: newStock.value.name,
+      code_name: newStock.value.name,  // 使用 code_name 而不是 name
+      google_name: newStock.value.google_code,  // 使用 google_name 而不是 google_code
       currency: newStock.value.market === 'HK' ? 'HKD' : 'USD'
     }
+    
+    // 打印提交的数据，方便调试
+    console.log('提交的股票数据:', stock)
     
     const response = await axios.post('/api/stock/stocks', stock)
     

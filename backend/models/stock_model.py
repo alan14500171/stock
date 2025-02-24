@@ -18,6 +18,11 @@ class Stock:
     def save(self):
         """保存或更新股票信息"""
         try:
+            # 验证必填字段
+            if not self.code or not self.market or not self.code_name:
+                logger.error("保存股票失败: 缺少必填字段")
+                return False
+
             if self.id:
                 # 更新
                 sql = """
@@ -31,6 +36,13 @@ class Stock:
                     self.google_name, self.id
                 ]
             else:
+                # 检查是否已存在相同代码的股票
+                check_sql = "SELECT id FROM stock.stocks WHERE code = %s AND market = %s"
+                existing = db.fetch_one(check_sql, [self.code, self.market])
+                if existing:
+                    logger.error(f"保存股票失败: 股票代码 {self.code} 在市场 {self.market} 已存在")
+                    return False
+
                 # 新增
                 sql = """
                     INSERT INTO stock.stocks (
@@ -45,10 +57,15 @@ class Stock:
                     self.google_name
                 ]
             
-            return db.execute(sql, params)
+            result = db.execute(sql, params)
+            if not result:
+                logger.error("保存股票失败: 数据库操作失败")
+                return False
+            return True
+            
         except Exception as e:
             logger.error(f"保存股票失败: {str(e)}")
-            return False
+            raise e  # 向上抛出异常，让调用者处理
     
     def to_dict(self):
         """转换为字典"""

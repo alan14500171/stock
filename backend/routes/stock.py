@@ -848,30 +848,54 @@ def add_stock():
     """添加股票"""
     try:
         data = request.get_json()
+        logger.info(f"接收到添加股票请求，数据：{data}")
         
+        # 验证必填字段
+        required_fields = ['code', 'market', 'code_name']
+        for field in required_fields:
+            if not data.get(field):
+                logger.error(f"添加股票失败：缺少必填字段 {field}")
+                return jsonify({
+                    'success': False,
+                    'message': f'缺少必填字段：{field}'
+                }), 400
+        
+        # 检查是否已存在相同代码的股票
+        check_sql = "SELECT id FROM stock.stocks WHERE code = %s AND market = %s"
+        existing = db.fetch_one(check_sql, [data['code'], data['market']])
+        if existing:
+            logger.error(f"添加股票失败：股票代码 {data['code']} 在市场 {data['market']} 已存在")
+            return jsonify({
+                'success': False,
+                'message': f"股票代码 {data['code']} 在市场 {data['market']} 已存在"
+            }), 400
+        
+        # 创建股票对象
         stock = Stock({
-            'code': data['code'],
-            'market': data['market'],
-            'code_name': data['code_name'],
-            'google_name': data.get('google_name'),
-            'industry': data.get('industry'),
-            'currency': data.get('currency')
+            'code': data['code'].strip(),
+            'market': data['market'].strip(),
+            'code_name': data['code_name'].strip(),
+            'google_name': data.get('google_name', '').strip()
         })
         
+        # 保存到数据库
+        logger.info(f"开始保存股票：{stock.to_dict()}")
         if stock.save():
+            logger.info("股票添加成功")
             return jsonify({
                 'success': True,
                 'message': '股票添加成功',
                 'data': stock.to_dict()
             })
         else:
+            logger.error("股票添加失败：数据库保存失败")
             return jsonify({
                 'success': False,
-                'message': '添加失败'
+                'message': '添加失败：数据库保存失败'
             }), 500
             
     except Exception as e:
-        logger.error(f'添加股票失败: {str(e)}')
+        logger.error(f"添加股票失败：{str(e)}")
         return jsonify({
             'success': False,
             'message': f'添加失败：{str(e)}'
