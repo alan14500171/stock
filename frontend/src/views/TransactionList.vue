@@ -14,26 +14,12 @@
 
     <!-- 搜索表单 -->
     <div v-show="searchVisible" class="card-body border-bottom">
-      <form @submit.prevent="search" class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label small">开始日期
-            <i class="fas fa-question-circle text-muted ms-1" 
-               data-bs-toggle="tooltip" 
-               data-bs-placement="top"
-               title="支持快速输入：
-t 或 today: 今天
-y 或 yday: 昨天
-tm 或 tmr: 明天
-+n/-n: n天后/前
-日期格式：
-MMDD: 0315
-MM-DD: 03-15
-M.D: 3.15
-DD: 15"></i>
-          </label>
+      <form @submit.prevent="search" class="row g-2 align-items-end">
+        <div class="col-auto" style="width: 160px;">
+          <label class="form-label small">开始日期</label>
           <input
             type="text"
-            class="form-control"
+            class="form-control form-control-sm"
             :value="startDateDisplayValue"
             @input="handleStartDateInput"
             @blur="handleStartDateBlur"
@@ -43,11 +29,11 @@ DD: 15"></i>
             ref="startDate"
           />
         </div>
-        <div class="col-md-3">
+        <div class="col-auto" style="width: 160px;">
           <label class="form-label small">结束日期</label>
           <input
             type="text"
-            class="form-control"
+            class="form-control form-control-sm"
             :value="endDateDisplayValue"
             @input="handleEndDateInput"
             @blur="handleEndDateBlur"
@@ -57,7 +43,7 @@ DD: 15"></i>
             ref="endDate"
           />
         </div>
-        <div class="col-md-2">
+        <div class="col-auto" style="width: 100px;">
           <label class="form-label small">市场</label>
           <select 
             class="form-select form-select-sm" 
@@ -71,7 +57,7 @@ DD: 15"></i>
             <option value="USA">USA</option>
           </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-auto" style="width: 160px;">
           <label class="form-label small">交易编号</label>
           <input
             type="text"
@@ -83,7 +69,7 @@ DD: 15"></i>
             placeholder="输入交易编号"
           />
         </div>
-        <div class="col-md-4">
+        <div class="col" style="min-width: 200px;">
           <label class="form-label small">股票代码</label>
           <stock-selector
             v-model="searchForm.stockCodes"
@@ -91,13 +77,13 @@ DD: 15"></i>
             :market="searchForm.market"
           />
         </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-sm btn-primary w-100" :disabled="loading" ref="searchBtn">
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary" style="width: 80px;" :disabled="loading" ref="searchBtn">
             <i class="fas fa-search"></i> 查询
           </button>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="button" class="btn btn-sm btn-outline-secondary w-100" @click="resetSearch">
+        <div class="col-auto">
+          <button type="button" class="btn btn-sm btn-outline-secondary" style="width: 80px;" @click="resetSearch">
             <i class="fas fa-undo"></i> 重置
           </button>
         </div>
@@ -862,6 +848,27 @@ onMounted(() => {
   line-height: 1.2;
 }
 
+/* 搜索区域间距优化 */
+.row.g-2 {
+  --bs-gutter-x: 0.5rem;
+  --bs-gutter-y: 0.5rem;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.card-body.border-bottom {
+  padding: 0.75rem;
+}
+
+/* 调整搜索区域的下拉框样式 */
+.stock-selector {
+  min-width: unset !important;
+}
+
+.stock-selector .dropdown-menu {
+  min-width: 300px;
+}
+
 /* 操作按钮样式优化 */
 .btn-xs {
   font-size: 0.75rem;
@@ -884,20 +891,6 @@ onMounted(() => {
   font-size: 0.75rem;
   min-width: 26px;
   text-align: center;
-}
-
-/* 搜索区域间距优化 */
-.row.g-3 {
-  --bs-gutter-x: 0.75rem;
-  --bs-gutter-y: 0.75rem;
-}
-
-.card-body {
-  padding: 0.75rem;
-}
-
-.card-body.border-bottom {
-  padding: 0.75rem;
 }
 
 /* 表格内容对齐和间距优化 */
