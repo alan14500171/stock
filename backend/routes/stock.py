@@ -1489,4 +1489,93 @@ def get_profit_stats():
         return jsonify({
             'success': False,
             'message': '获取盈利统计数据失败'
-        }) 
+        })
+
+@stock_bp.route('/stocks/search')
+@login_required
+def search_stocks():
+    """搜索股票"""
+    try:
+        query = request.args.get('query', '').strip()
+        if not query:
+            return jsonify({
+                'success': True,
+                'data': []
+            })
+
+        # 构建SQL查询
+        sql = """
+            SELECT code, name, market
+            FROM stocks
+            WHERE code LIKE %s OR name LIKE %s
+            ORDER BY 
+                CASE 
+                    WHEN code = %s THEN 1
+                    WHEN code LIKE %s THEN 2
+                    WHEN name LIKE %s THEN 3
+                    ELSE 4
+                END,
+                market,
+                code
+            LIMIT 10
+        """
+        
+        # 准备查询参数
+        exact_match = query
+        prefix_match = f"{query}%"
+        contains_match = f"%{query}%"
+        
+        params = [
+            contains_match,  # code LIKE
+            contains_match,  # name LIKE
+            exact_match,    # code =
+            prefix_match,   # code LIKE (prefix)
+            prefix_match    # name LIKE (prefix)
+        ]
+        
+        # 执行查询
+        results = db.fetch_all(sql, params)
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        })
+        
+    except Exception as e:
+        logger.error(f"搜索股票失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'搜索股票失败: {str(e)}'
+        }), 500
+
+@stock_bp.route('/transactions/check-code')
+@login_required
+def check_transaction_code():
+    """检查交易编号是否已存在"""
+    try:
+        code = request.args.get('code')
+        if not code:
+            return jsonify({
+                'success': False,
+                'message': '请提供交易编号'
+            }), 400
+
+        # 查询数据库中是否存在相同的交易编号
+        sql = """
+            SELECT COUNT(*) as count 
+            FROM stock_transactions 
+            WHERE user_id = %s AND transaction_code = %s
+        """
+        result = db.fetch_one(sql, [session['user_id'], code])
+        
+        return jsonify({
+            'success': True,
+            'exists': result['count'] > 0
+        })
+        
+    except Exception as e:
+        logger.error(f"检查交易编号失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'检查交易编号失败: {str(e)}'
+        }), 500 

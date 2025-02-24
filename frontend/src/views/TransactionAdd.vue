@@ -26,17 +26,45 @@
 
         <div class="col-md-4">
           <label class="form-label">股票代码</label>
-          <input
-            type="text"
-            class="form-control"
-            v-model="form.stock_code"
-            :ref="el => inputRefs.stock_code.value = el"
-            @input="handleStockCodeInput"
-            @keydown="handleKeyNavigation($event, 'stock_code')"
-            :class="{ 'is-invalid': errors.stock_code }"
-            placeholder="输入代码或名称搜索"
-          />
-          <div class="invalid-feedback">{{ errors.stock_code }}</div>
+          <div class="position-relative">
+            <div class="stock-input-wrapper">
+              <input
+                type="text"
+                class="form-control"
+                v-model="form.stock_code"
+                :ref="el => inputRefs.stock_code.value = el"
+                @input="handleStockCodeInput"
+                @keydown="handleKeyNavigation($event, 'stock_code')"
+                @keydown.down.prevent="navigateStockList('down')"
+                @keydown.up.prevent="navigateStockList('up')"
+                @keydown.enter.prevent="handleStockSelect"
+                @keydown.esc="closeStockList"
+                :class="{ 'is-invalid': errors.stock_code }"
+                placeholder="输入代码或名称搜索"
+              />
+              <span v-if="form.stock_code && form.stock_name" class="selected-stock">
+                <span :class="['market-tag', form.market === 'HK' ? 'hk' : 'usa']">{{ form.market }}</span>
+                {{ form.stock_code }} {{ form.stock_name }}
+              </span>
+            </div>
+            <div class="invalid-feedback">{{ errors.stock_code }}</div>
+            
+            <!-- 股票搜索结果下拉列表 -->
+            <div v-if="showStockList && filteredStocks.length > 0" class="stock-list">
+              <a
+                v-for="(stock, index) in filteredStocks"
+                :key="stock.code"
+                href="#"
+                class="stock-item"
+                :class="{ 'active': index === currentStockIndex }"
+                @click.prevent="selectStock(stock)"
+                @mouseover="currentStockIndex = index"
+              >
+                <span :class="['market-tag', stock.market === 'HK' ? 'hk' : 'usa']">{{ stock.market }}</span>
+                {{ stock.code }} - {{ stock.name }}
+              </a>
+            </div>
+          </div>
         </div>
 
         <div class="col-md-4">
@@ -47,6 +75,7 @@
             v-model="form.transaction_code"
             :ref="el => inputRefs.transaction_code.value = el"
             @input="handleTransactionCodeInput"
+            @blur="handleTransactionCodeBlur"
             @keydown="handleKeyNavigation($event, 'transaction_code')"
             :class="{ 'is-invalid': errors.transaction_code }"
           />
@@ -223,12 +252,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDateInput } from '../composables/useDateInput'
 import StockSelector from '../components/StockSelector.vue'
 import axios from 'axios'
 import useMessage from '../composables/useMessage'
+import { debounce } from 'lodash'
 
 const router = useRouter()
 const message = useMessage()
@@ -247,7 +277,8 @@ const form = ref({
   transaction_levy:  '',
   stamp_duty:  '',
   trading_fee:  '',
-  deposit_fee:  ''
+  deposit_fee:  '',
+  market: 'HK'
 })
 
 // 错误信息
@@ -288,6 +319,11 @@ const inputRefs = {
   quantityRefs: [],
   priceRefs: []
 }
+
+// 股票搜索相关
+const showStockList = ref(false)
+const filteredStocks = ref([])
+const currentStockIndex = ref(-1)
 
 // 方法
 const addDetail = () => {
@@ -399,6 +435,48 @@ const handleTransactionCodeInput = (event) => {
   }
 }
 
+// 添加交易编号失去焦点事件处理
+const handleTransactionCodeBlur = async (event) => {
+  const code = form.value.transaction_code.trim()
+  if (!code) return
+
+  try {
+    const response = await axios.get(`/api/stock/transactions/check-code?code=${encodeURIComponent(code)}`)
+    if (response.data.exists) {
+      errors.value.transaction_code = '交易编号已存在，请重新输入'
+      // 保持焦点在输入框
+      event.target.focus()
+    } else {
+      delete errors.value.transaction_code
+    }
+  } catch (error) {
+    console.error('检查交易编号失败:', error)
+    message.error('检查交易编号失败，请重试')
+  }
+}
+
+// 处理股票选择
+const handleStockSelect = () => {
+  if (showStockList.value && filteredStocks.value.length > 0) {
+    const selectedStock = currentStockIndex.value >= 0 && currentStockIndex.value < filteredStocks.value.length
+      ? filteredStocks.value[currentStockIndex.value]
+      : filteredStocks.value[0]
+    selectStock(selectedStock)
+  }
+}
+
+// 选择股票
+const selectStock = (stock) => {
+  if (stock && stock.code) {
+    form.value.stock_code = stock.code
+    form.value.stock_name = stock.name || ''
+    form.value.market = stock.market || 'HK'
+  }
+  showStockList.value = false
+  filteredStocks.value = []
+  currentStockIndex.value = -1
+}
+
 // 提交表单
 const submitForm = async () => {
   try {
@@ -419,7 +497,8 @@ const submitForm = async () => {
       transaction_levy: parseFloat(form.value.transaction_levy) || 0,
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
       trading_fee: parseFloat(form.value.trading_fee) || 0,
-      deposit_fee: parseFloat(form.value.deposit_fee) || 0
+      deposit_fee: parseFloat(form.value.deposit_fee) || 0,
+      market: form.value.market
     }
     
     const response = await axios.post('/api/stock/transactions', submitData)
@@ -461,7 +540,8 @@ const resetForm = () => {
     transaction_levy: 0,
     stamp_duty: 0,
     trading_fee: 0,
-    deposit_fee: 0
+    deposit_fee: 0,
+    market: 'HK'
   }
   errors.value = {}
 }
@@ -508,7 +588,13 @@ onMounted(() => {
       });
     });
   });
+
+  document.addEventListener('click', handleClickOutside)
 });
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // 修改动态ref的处理
 const setQuantityRef = (el, index) => {
@@ -638,6 +724,60 @@ const handleKeyNavigation = (event, fieldName) => {
     }
   }
 };
+
+// 处理股票代码输入
+const handleStockCodeInput = debounce(async (event) => {
+  const query = event.target.value.trim()
+  if (!query) {
+    showStockList.value = false
+    filteredStocks.value = []
+    return
+  }
+
+  try {
+    const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(query)}`)
+    if (response.data.success && Array.isArray(response.data.data)) {
+      filteredStocks.value = response.data.data
+      showStockList.value = filteredStocks.value.length > 0
+      currentStockIndex.value = -1
+    } else {
+      filteredStocks.value = []
+      showStockList.value = false
+    }
+  } catch (error) {
+    console.error('搜索股票失败:', error)
+    filteredStocks.value = []
+    showStockList.value = false
+  }
+}, 300)
+
+// 导航股票列表
+const navigateStockList = (direction) => {
+  if (!showStockList.value || filteredStocks.value.length === 0) return
+
+  if (direction === 'up') {
+    currentStockIndex.value = currentStockIndex.value <= 0 
+      ? filteredStocks.value.length - 1 
+      : currentStockIndex.value - 1
+  } else {
+    currentStockIndex.value = currentStockIndex.value >= filteredStocks.value.length - 1
+      ? 0 
+      : currentStockIndex.value + 1
+  }
+}
+
+// 关闭股票列表
+const closeStockList = () => {
+  showStockList.value = false
+  currentStockIndex.value = -1
+}
+
+// 点击外部关闭股票列表
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.position-relative')) {
+    closeStockList()
+  }
+}
 </script>
 
 <style scoped>
@@ -770,5 +910,82 @@ const handleKeyNavigation = (event, fieldName) => {
 .row > [class*="col-"] {
   padding-right: calc(var(--bs-gutter-x) * 0.5);
   padding-left: calc(var(--bs-gutter-x) * 0.5);
+}
+
+/* 添加股票搜索相关样式 */
+.stock-input-wrapper {
+  position: relative;
+}
+
+.stock-input-wrapper input {
+  padding-right: 120px;
+}
+
+.selected-stock {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.875rem;
+  color: #666;
+  max-width: 70%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.market-tag {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.market-tag.hk {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.market-tag.usa {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.stock-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
+}
+
+.stock-item {
+  display: block;
+  padding: 0.5rem;
+  color: #212529;
+  text-decoration: none;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.stock-item:last-child {
+  border-bottom: none;
+}
+
+.stock-item:hover,
+.stock-item.active {
+  background-color: #f8f9fa;
+}
+
+.stock-item:active {
+  background-color: #e9ecef;
 }
 </style> 
