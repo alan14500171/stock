@@ -43,12 +43,12 @@
                 <input 
                   type="text" 
                   class="form-control" 
-                  v-model="form.name"
-                  :class="{ 'is-invalid': errors.name }"
+                  v-model="form.code_name"
+                  :class="{ 'is-invalid': errors.code_name }"
                   :readonly="!editData"
                   data-testid="stock-name-input"
                 />
-                <div class="invalid-feedback" data-testid="stock-name-error">{{ errors.name }}</div>
+                <div class="invalid-feedback" data-testid="stock-name-error">{{ errors.code_name }}</div>
               </div>
 
               <div class="mb-3">
@@ -127,7 +127,7 @@ const stockSelected = ref(false)
 const form = ref({
   market: '',
   code: '',
-  name: '',
+  code_name: '',
   google_code: '',
   current_price: null
 })
@@ -137,7 +137,7 @@ const resetFormExceptCode = () => {
   form.value = {
     market: '',
     code: currentCode,
-    name: '',
+    code_name: '',
     google_code: '',
     current_price: null
   }
@@ -196,15 +196,15 @@ const handleCodeEnter = async (event) => {
       // 更新表单数据,保持原始代码
       form.value.current_price = stockData.price
       form.value.google_code = stockData.query
-      form.value.name = stockData.code_name || ''
+      form.value.code_name = stockData.code_name || ''
       form.value.market = stockData.market
       
-      if (form.value.name) {
+      if (form.value.code_name) {
         stockSelected.value = true
       }
       
-      if (!form.value.name) {
-        errors.value.name = '未能获取公司名称'
+      if (!form.value.code_name) {
+        errors.value.code_name = '未能获取公司名称'
       }
     } else {
       alertMessage.value = '未找到股票信息，请检查股票代码是否正确'
@@ -231,7 +231,7 @@ const resetForm = () => {
   form.value = {
     market: '',
     code: '',
-    name: '',
+    code_name: '',
     google_code: '',
     current_price: null
   }
@@ -245,20 +245,20 @@ const validateForm = () => {
   errors.value = {}
   let isValid = true
 
-  if (!form.value.code) {
+  if (!form.value.code || !form.value.code.trim()) {
     errors.value.code = '请输入股票代码'
     isValid = false
   }
-  if (!form.value.market) {
-    errors.value.market = '无法确定股票市场'
+  if (!form.value.market || !form.value.market.trim()) {
+    errors.value.market = '请选择股票市场'
     isValid = false
   }
-  if (!form.value.name) {
-    errors.value.name = '未能获取股票名称'
+  if (!form.value.code_name || !form.value.code_name.trim()) {
+    errors.value.code_name = '请输入股票名称'
     isValid = false
   }
-  if (!form.value.current_price) {
-    errors.value.code = '未能获取股票价格，请确认股票代码是否正确'
+  if (!form.value.google_code || !form.value.google_code.trim()) {
+    errors.value.google_code = '请输入谷歌查询代码'
     isValid = false
   }
 
@@ -278,7 +278,7 @@ watch(() => props.editData, (newData) => {
     form.value = {
       code: newData.code,
       market: newData.market,
-      name: newData.code_name,
+      code_name: newData.code_name,
       google_code: newData.google_name,
       current_price: newData.current_price
     }
@@ -288,22 +288,22 @@ watch(() => props.editData, (newData) => {
   }
 }, { immediate: true })
 
-// 修改提交表单方法 - 保持原始股票代码格式,不做任何处理
+// 修改提交表单方法
 const handleSubmit = async () => {
-  if (!validateForm() || submitting.value) return
-
-  submitting.value = true
-  
   try {
+    if (!validateForm() || submitting.value) return
+
+    submitting.value = true
+    
+    const stock = {
+      code: form.value.code.trim(),
+      market: form.value.market.trim(),
+      code_name: form.value.code_name.trim(),
+      google_name: form.value.google_code.trim(),
+      currency: form.value.market === 'HK' ? 'HKD' : 'USD'
+    }
+    
     if (props.editData) {
-      const stock = {
-        code: form.value.code, // 直接使用原始输入的代码,不做格式化
-        market: form.value.market,
-        code_name: form.value.name,
-        google_name: form.value.google_code,
-        currency: form.value.market === 'HK' ? 'HKD' : 'USD'
-      }
-      
       const response = await axios.put(`/api/stock/stocks/${props.editData.id}`, stock)
       
       if (response.data.success) {
@@ -311,17 +311,9 @@ const handleSubmit = async () => {
         emit('success', response.data.data)
         handleClose()
       } else {
-        message.error(response.data.message || '更新股票失败')
+        throw new Error(response.data.message || '更新股票失败')
       }
     } else {
-      const stock = {
-        code: form.value.code, // 直接使用原始输入的代码,不做格式化
-        market: form.value.market,
-        code_name: form.value.name,
-        google_name: form.value.google_code,
-        currency: form.value.market === 'HK' ? 'HKD' : 'USD'
-      }
-      
       const response = await axios.post('/api/stock/stocks', stock)
       
       if (response.data.success) {
@@ -329,13 +321,13 @@ const handleSubmit = async () => {
         emit('success', response.data.data)
         handleClose()
       } else {
-        message.error(response.data.message || '添加股票失败')
-        form.value.current_price = null
+        throw new Error(response.data.message || '添加股票失败')
       }
     }
   } catch (error) {
-    message.error(error.response?.data?.message || error.message || (props.editData ? '更新失败' : '添加失败') + '，请稍后重试')
-    form.value.current_price = null
+    const errorMsg = error.response?.data?.message || error.message || (props.editData ? '更新失败' : '添加失败')
+    message.error(errorMsg + '，请稍后重试')
+    errors.value.code = errorMsg
   } finally {
     submitting.value = false
   }
