@@ -614,7 +614,7 @@ def get_transaction_logs():
             WITH base_transactions AS (
                 SELECT 
                     t.*,
-                    s.name as stock_name,
+                    s.code_name as stock_name,
                     (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees_hkd
                 FROM stock.stock_transactions t
                 LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
@@ -1259,7 +1259,7 @@ def get_transaction(id):
                 t.transaction_date,
                 t.market,
                 t.stock_code,
-                s.name as stock_name,
+                s.code_name as stock_name,
                 t.transaction_code,
                 t.transaction_type,
                 t.total_quantity,
@@ -1366,7 +1366,7 @@ def get_profit_stats():
                 SELECT 
                     t.market,
                     t.stock_code,
-                    s.name as stock_name,
+                    s.code_name as stock_name,
                     t.transaction_type,
                     SUM(t.total_quantity) as total_quantity,
                     SUM(t.total_amount) as total_amount,
@@ -1375,7 +1375,7 @@ def get_profit_stats():
                 FROM stock.stock_transactions t
                 LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
                 WHERE {where_clause}
-                GROUP BY t.market, t.stock_code, s.name, t.transaction_type
+                GROUP BY t.market, t.stock_code, s.code_name, t.transaction_type
             )
             SELECT * FROM transaction_summary
             ORDER BY market, stock_code, transaction_type
