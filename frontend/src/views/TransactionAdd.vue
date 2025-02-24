@@ -35,6 +35,7 @@
                 :ref="el => inputRefs.stock_code.value = el"
                 @input="handleStockCodeInput"
                 @blur="handleStockCodeBlur"
+                @focus="handleStockCodeFocus"
                 @keydown="handleKeyNavigation($event, 'stock_code')"
                 @keydown.down.prevent="navigateStockList('down')"
                 @keydown.up.prevent="navigateStockList('up')"
@@ -1246,6 +1247,10 @@ const formatStockCode = (code, market = '') => {
   }
   // 非港股市场，保持原样
   return code.trim()
+}
+
+const handleStockCodeFocus = () => {
+  form.value.stock_code = ''
 }
 </script>
 
