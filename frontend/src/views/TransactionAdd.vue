@@ -602,17 +602,35 @@ const handleStockSelect = () => {
 // 选择股票
 const selectStock = (stock) => {
   if (stock && stock.code) {
-    form.value.stock_code = stock.code
-    form.value.stock_name = stock.name || ''
-    form.value.market = stock.market || 'HK'
-    stockSelected.value = true
-    
-    setTimeout(() => {
-      showStockList.value = false
-      filteredStocks.value = []
-      currentStockIndex.value = -1
-    }, 100)
+    // 再次验证股票是否存在
+    axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(stock.code)}`)
+      .then(response => {
+        if (response.data.success && response.data.data.length > 0) {
+          const foundStock = response.data.data.find(s => s.code === stock.code)
+          if (foundStock) {
+            form.value.stock_code = foundStock.code
+            form.value.stock_name = foundStock.name || ''
+            form.value.market = foundStock.market || 'HK'
+            stockSelected.value = true
+          } else {
+            message.warning('该股票可能已被删除，请重新选择')
+            form.value.stock_code = ''
+            form.value.stock_name = ''
+            stockSelected.value = false
+          }
+        }
+      })
+      .catch(error => {
+        console.error('验证股票失败:', error)
+        message.error('验证股票失败，请重新选择')
+      })
   }
+  
+  setTimeout(() => {
+    showStockList.value = false
+    filteredStocks.value = []
+    currentStockIndex.value = -1
+  }, 100)
 }
 
 // 提交表单
@@ -928,7 +946,7 @@ const handleKeyNavigation = (event, fieldName) => {
 
 // 处理股票代码输入
 const handleStockCodeInput = debounce(async (event) => {
-  const query = event.target.value
+  const query = event.target.value.trim()
   if (!query) {
     showStockList.value = false
     filteredStocks.value = []
@@ -936,19 +954,32 @@ const handleStockCodeInput = debounce(async (event) => {
   }
 
   try {
-    const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(query)}`)
+    // 每次搜索都从服务器获取最新数据
+    const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(query)}`, {
+      params: {
+        timestamp: new Date().getTime() // 添加时间戳防止缓存
+      }
+    })
+    
     if (response.data.success && Array.isArray(response.data.data)) {
       filteredStocks.value = response.data.data
       showStockList.value = filteredStocks.value.length > 0
       currentStockIndex.value = -1
+      
+      // 如果没有找到股票，显示提示信息
+      if (filteredStocks.value.length === 0) {
+        message.info('未找到匹配的股票')
+      }
     } else {
       filteredStocks.value = []
       showStockList.value = false
+      message.warning('获取股票列表失败')
     }
   } catch (error) {
     console.error('搜索股票失败:', error)
     filteredStocks.value = []
     showStockList.value = false
+    message.error('搜索股票失败，请重试')
   }
 }, 300)
 

@@ -257,7 +257,7 @@
                                     <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
                                       {{ detail.transaction_type === 'BUY' ? '买入' : '卖出' }}
                                     </span>
-                                    <span class="transaction-code">{{ detail.transaction_code }}</span>
+                                    <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
                                   </td>
                                   <td class="quantity-price">
                                     {{ formatNumber(detail.total_quantity, 0) }} @ 
@@ -375,7 +375,7 @@
                                     <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
                                       {{ detail.transaction_type === 'BUY' ? '买入' : '卖出' }}
                                     </span>
-                                    <span class="transaction-code">{{ detail.transaction_code }}</span>
+                                    <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
                                   </td>
                                   <td class="quantity-price">
                                     {{ formatNumber(detail.total_quantity, 0) }} @ 

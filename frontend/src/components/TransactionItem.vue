@@ -4,7 +4,7 @@
     <td>
       <div class="transaction-header">
         <small class="text-muted">{{ formatDate(transaction.transaction_date) }}</small>
-        <small class="text-muted ms-2">{{ transaction.transaction_code }}</small>
+        <small class="text-muted ms-2">{{ transaction.transaction_code.trim() }}</small>
       </div>
     </td>
     <td class="text-end">{{ formatNumber(transaction.total_quantity) }}</td>

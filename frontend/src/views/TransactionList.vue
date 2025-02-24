@@ -122,7 +122,7 @@
                   <br>
                   <small class="text-muted">{{ transaction.stock_name }}</small>
                 </td>
-                <td>{{ transaction.transaction_code }}</td>
+                <td>{{ transaction.transaction_code.trim() }}</td>
                 <td>
                   <span :class="['badge', transaction.transaction_type === 'BUY' ? 'bg-danger' : 'bg-success']">
                     {{ transaction.transaction_type === 'BUY' ? '买入' : '卖出' }}

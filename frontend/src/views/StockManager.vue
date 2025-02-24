@@ -218,12 +218,24 @@ const confirmDelete = async (stock) => {
   if (!confirm(`确定要删除股票 ${stock.code} - ${stock.code_name} 吗？`)) return
   
   try {
+    loading.value = true  // 添加加载状态
     const response = await axios.delete(`/api/stock/stocks/${stock.id}`)
     if (response.data.success) {
-      fetchStocks()
+      // 显示成功消息
+      alert('删除成功')
+      // 如果当前页只有一条数据，且不是第一页，则跳转到上一页
+      if (stocks.value.length === 1 && currentPage.value > 1) {
+        currentPage.value--
+      }
+      await fetchStocks()  // 使用 await 确保获取最新数据
+    } else {
+      throw new Error(response.data.message || '删除失败')
     }
   } catch (error) {
     console.error('删除股票失败:', error)
+    alert(error.response?.data?.message || error.message || '删除失败，请重试')
+  } finally {
+    loading.value = false  // 清除加载状态
   }
 }
 
