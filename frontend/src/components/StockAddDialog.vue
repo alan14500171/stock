@@ -4,7 +4,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">添加新股票</h5>
+            <h5 class="modal-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
             <button type="button" class="btn-close" @click="handleClose"></button>
           </div>
           <div class="modal-body">
@@ -19,6 +19,7 @@
                   placeholder="输入股票代码后将自动查询股票信息"
                   @keydown.enter.prevent="handleCodeEnter"
                   @keydown.tab.prevent="handleCodeEnter"
+                  :readonly="!!editData"
                 />
                 <div class="invalid-feedback">{{ errors.code }}</div>
               </div>
@@ -30,7 +31,7 @@
                   class="form-control" 
                   v-model="form.market"
                   :class="{ 'is-invalid': errors.market }"
-                  readonly
+                  :readonly="true"
                 />
                 <div class="invalid-feedback">{{ errors.market }}</div>
               </div>
@@ -42,7 +43,7 @@
                   class="form-control" 
                   v-model="form.name"
                   :class="{ 'is-invalid': errors.name }"
-                  readonly
+                  :readonly="!editData"
                 />
                 <div class="invalid-feedback">{{ errors.name }}</div>
               </div>
@@ -53,7 +54,7 @@
                   type="text" 
                   class="form-control" 
                   v-model="form.google_code"
-                  readonly
+                  :readonly="!editData"
                 />
               </div>
 
@@ -82,7 +83,8 @@
               @click="handleSubmit"
               :disabled="submitting"
             >
-              确认添加
+              <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+              {{ editData ? '保存修改' : '确认添加' }}
             </button>
           </div>
         </div>
@@ -209,7 +211,7 @@ const handleCodeEnter = async (event) => {
       // 更新表单数据
       form.value.current_price = stockData.price
       form.value.google_code = stockData.query
-      form.value.name = stockData.name || ''
+      form.value.name = stockData.code_name || ''
       form.value.market = stockData.market
       form.value.code = stockData.code
       
@@ -310,53 +312,91 @@ const handleClose = () => {
   resetForm()
 }
 
-// 提交表单
+// 监听 editData 变化
+watch(() => props.editData, (newData) => {
+  if (newData) {
+    form.value = {
+      code: newData.code || '',
+      market: newData.market || '',
+      name: newData.code_name || '',
+      google_code: newData.google_name || '',
+      current_price: newData.current_price || null
+    }
+    stockSelected.value = true
+  } else {
+    resetForm()
+  }
+}, { immediate: true })
+
+// 修改提交表单方法
 const handleSubmit = async () => {
   if (!validateForm() || submitting.value) return
 
   submitting.value = true
   
   try {
-    // 再次检查股票是否已存在
-    const formattedCode = formatStockCode(form.value.code, form.value.market)
-    const checkResponse = await axios.get('/api/stock/stocks', {
-      params: {
-        search: formattedCode
+    if (props.editData) {
+      // 编辑模式
+      const stock = {
+        code: form.value.code,
+        market: form.value.market,
+        code_name: form.value.name,
+        google_name: form.value.google_code,
+        currency: form.value.market === 'HK' ? 'HKD' : 'USD'
       }
-    })
-    
-    if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
-      const existingStock = checkResponse.data.data.items.find(
-        stock => stock.code === formattedCode
-      )
-      if (existingStock) {
-        message.warning('该股票代码已存在')
-        form.value.current_price = null
-        submitting.value = false
-        return
+      
+      const response = await axios.put(`/api/stock/stocks/${props.editData.id}`, stock)
+      
+      if (response.data.success) {
+        message.success('股票更新成功')
+        emit('success', response.data.data)
+        handleClose()
+      } else {
+        message.error(response.data.message || '更新股票失败')
       }
-    }
-
-    const stock = {
-      code: formattedCode,
-      market: form.value.market,
-      name: form.value.name,
-      full_name: form.value.name,
-      currency: form.value.market === 'HK' ? 'HKD' : 'USD'
-    }
-    
-    const response = await axios.post('/api/stock/stocks', stock)
-    
-    if (response.data.success) {
-      message.success('股票添加成功')
-      emit('success', response.data.data)
-      handleClose()
     } else {
-      message.error(response.data.message || '添加股票失败')
-      form.value.current_price = null
+      // 添加模式
+      // 再次检查股票是否已存在
+      const formattedCode = formatStockCode(form.value.code, form.value.market)
+      const checkResponse = await axios.get('/api/stock/stocks', {
+        params: {
+          search: formattedCode
+        }
+      })
+      
+      if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
+        const existingStock = checkResponse.data.data.items.find(
+          stock => stock.code === formattedCode
+        )
+        if (existingStock) {
+          message.warning('该股票代码已存在')
+          form.value.current_price = null
+          submitting.value = false
+          return
+        }
+      }
+
+      const stock = {
+        code: formattedCode,
+        market: form.value.market,
+        code_name: form.value.name,
+        google_name: form.value.google_code,
+        currency: form.value.market === 'HK' ? 'HKD' : 'USD'
+      }
+      
+      const response = await axios.post('/api/stock/stocks', stock)
+      
+      if (response.data.success) {
+        message.success('股票添加成功')
+        emit('success', response.data.data)
+        handleClose()
+      } else {
+        message.error(response.data.message || '添加股票失败')
+        form.value.current_price = null
+      }
     }
   } catch (error) {
-    message.error(error.response?.data?.message || '添加失败，请稍后重试')
+    message.error(error.response?.data?.message || error.message || (props.editData ? '更新失败' : '添加失败') + '，请稍后重试')
     form.value.current_price = null
   } finally {
     submitting.value = false

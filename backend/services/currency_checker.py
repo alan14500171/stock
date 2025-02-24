@@ -93,7 +93,7 @@ class CurrencyChecker:
                         'exchange': exchange,
                         'price': price,
                         'query': query,
-                        'name': stock_name,
+                        'code_name': stock_name,
                         'code': code
                     })
             except Exception as e:

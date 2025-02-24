@@ -270,7 +270,7 @@ def get_profit_stats():
                 t.id,
                 t.market,
                 t.stock_code,
-                s.name as stock_name,
+                s.code_name as stock_name,
                 UPPER(t.transaction_type) as transaction_type,
                 t.transaction_date,
                 t.transaction_code,
@@ -370,8 +370,8 @@ def refresh_stock_prices():
             SELECT 
                 s.market,
                 s.code,
-                s.name as stock_name,
-                s.full_name,
+                s.code_name as stock_name,
+                s.google_name,
                 SUM(CASE 
                     WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity 
                     WHEN UPPER(t.transaction_type) = 'SELL' THEN -t.total_quantity 
@@ -383,7 +383,7 @@ def refresh_stock_prices():
             FROM stock.stock_transactions t
             JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
             WHERE t.user_id = %s
-            GROUP BY s.market, s.code, s.name, s.full_name
+            GROUP BY s.market, s.code, s.code_name, s.google_name
             HAVING SUM(CASE 
                 WHEN UPPER(t.transaction_type) = 'BUY' THEN t.total_quantity 
                 WHEN UPPER(t.transaction_type) = 'SELL' THEN -t.total_quantity 
@@ -411,7 +411,7 @@ def refresh_stock_prices():
             
             try:
                 # 获取当前股价
-                query = stock['full_name']
+                query = stock['google_name']
                 logger.info(f"查询股价: {query}")
                 price_result = checker.get_stock_price(query)
                 logger.info(f"获取到的股价: {price_result}")
