@@ -222,7 +222,7 @@ import StockSelector from '../components/StockSelector.vue'
 import TransactionItem from '../components/TransactionItem.vue'
 
 const router = useRouter()
-const message = useMessage()
+const { message } = useMessage()
 const loading = ref(false)
 const searchVisible = ref(false)
 const transactions = ref([])
@@ -512,14 +512,43 @@ const fetchTransactions = async () => {
     }
     params.append('page', currentPage.value)
     params.append('per_page', pageSize)
+    // 添加时间戳参数避免缓存
+    params.append('_t', Date.now())
     
-    const response = await axios.get('/api/stock/transactions/', { params })
+    const response = await axios.get('/api/stock/transactions/', { 
+      params,
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      withCredentials: true,
+      // 添加 cache 控制
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    
     if (response.data.success) {
       transactions.value = response.data.data.items
       totalPages.value = response.data.data.pages
+      
+      // 如果当前页大于总页数，跳转到最后一页
+      if (currentPage.value > totalPages.value && totalPages.value > 0) {
+        currentPage.value = totalPages.value
+        await fetchTransactions()
+        return
+      }
     }
   } catch (error) {
-    showToast('获取交易记录失败，请稍后重试', 'danger')
+    if (error.response?.status === 401) {
+      message.error('登录已过期，请重新登录')
+      router.push('/login')
+      return
+    }
+    message.error('获取交易记录失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -550,54 +579,50 @@ const resetSearch = () => {
 
 // 删除交易记录
 const confirmDelete = async (transaction) => {
-  if (!confirm('确定要删除这条交易记录吗？')) return
-  
   try {
-    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`)
+    if (!window.confirm('确定要删除这条交易记录吗？')) {
+      return
+    }
+    
+    loading.value = true
+    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`, {
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      withCredentials: true
+    })
+    
     if (response.data.success) {
       message.success('交易记录删除成功')
-      fetchTransactions()
+      
+      // 如果当前页只有一条记录，且不是第一页，则跳转到上一页
+      if (transactions.value.length === 1 && currentPage.value > 1) {
+        currentPage.value--
+      }
+      
+      // 重新获取数据
+      await fetchTransactions()
+      await fetchStocks()
     } else {
       throw new Error(response.data.message || '删除失败')
     }
   } catch (error) {
-    message.error(error.response?.data?.message || error.message || '删除失败，请稍后重试')
+    console.error('删除交易记录失败:', error)
+    if (error.response?.status === 401) {
+      message.error('登录已过期，请重新登录')
+      router.push('/login')
+      return
+    } else if (error.response?.status === 404) {
+      message.error('交易记录不存在或已被删除')
+      // 刷新列表以获取最新数据
+      await fetchTransactions()
+    } else {
+      message.error(error.response?.data?.message || error.message || '删除失败，请稍后重试')
+    }
+  } finally {
+    loading.value = false
   }
-}
-
-// 添加 toast 提示函数
-const showToast = (message, type = 'danger') => {
-  const toastContainer = document.getElementById('toast-container') || (() => {
-    const container = document.createElement('div')
-    container.id = 'toast-container'
-    container.className = 'position-fixed top-0 end-0 p-3'
-    container.style.zIndex = '1050'
-    document.body.appendChild(container)
-    return container
-  })()
-
-  const toastElement = document.createElement('div')
-  toastElement.className = `toast align-items-center text-white bg-${type} border-0`
-  toastElement.setAttribute('role', 'alert')
-  toastElement.setAttribute('aria-live', 'assertive')
-  toastElement.setAttribute('aria-atomic', 'true')
-  
-  toastElement.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body">
-        ${message}
-      </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-  `
-  
-  toastContainer.appendChild(toastElement)
-  const toast = new bootstrap.Toast(toastElement)
-  toast.show()
-  
-  toastElement.addEventListener('hidden.bs.toast', () => {
-    toastElement.remove()
-  })
 }
 
 // 编辑交易记录

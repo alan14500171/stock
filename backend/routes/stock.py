@@ -552,7 +552,11 @@ def delete_transaction(id):
                 'message': '交易记录不存在或无权限删除'
             }), 404
             
-        # 删除记录
+        # 先删除交易明细记录
+        delete_details_sql = "DELETE FROM stock_transaction_details WHERE transaction_id = %s"
+        db.execute(delete_details_sql, [id])
+        
+        # 再删除主记录
         delete_sql = "DELETE FROM stock_transactions WHERE id = %s"
         if db.execute(delete_sql, [id]):
             return jsonify({
