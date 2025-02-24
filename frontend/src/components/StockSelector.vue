@@ -462,15 +462,36 @@ onBeforeUnmount(() => {
 }
 
 .dropdown-item.active {
-  background-color: #e9ecef;
+  background-color: #e2e6ea;
   color: #212529;
 }
 
 .dropdown-item:hover {
-  background-color: #f8f9fa;
+  background-color: #e9ecef;
 }
 
 .dropdown-item.active:hover {
-  background-color: #e9ecef;
+  background-color: #d4d9dd;
+}
+
+.stock-item {
+  display: block;
+  padding: 0.5rem;
+  color: #212529;
+  text-decoration: none;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.stock-item:last-child {
+  border-bottom: none;
+}
+
+.stock-item:hover,
+.stock-item.active {
+  background-color: #e2e6ea;
+}
+
+.stock-item:active {
+  background-color: #d4d9dd;
 }
 </style> 

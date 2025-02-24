@@ -998,16 +998,18 @@ const handleClickOutside = (event) => {
   font-size: 0.75rem;
   font-weight: 500;
   margin-right: 0.5rem;
+  min-width: 40px;
+  text-align: center;
 }
 
 .market-tag.hk {
-  background-color: #ffebee;
-  color: #d32f2f;
+  background-color: #dc3545;
+  color: #fff;
 }
 
 .market-tag.usa {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: #0d6efd;
+  color: #fff;
 }
 
 .stock-list {
@@ -1022,26 +1024,32 @@ const handleClickOutside = (event) => {
   border-radius: 0.25rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   z-index: 1000;
+  flex: 1;
 }
 
 .stock-item {
   display: block;
-  padding: 0.5rem;
+  padding: 0.5rem 0.75rem;
   color: #212529;
   text-decoration: none;
   border-bottom: 1px solid #dee2e6;
+  cursor: pointer;
 }
 
 .stock-item:last-child {
   border-bottom: none;
 }
 
-.stock-item:hover,
-.stock-item.active {
-  background-color: #f8f9fa;
+.stock-item:hover {
+  background-color: #e9ecef;
 }
 
-.stock-item:active {
-  background-color: #e9ecef;
+.stock-item.active {
+  background-color: #cfd4da;
+  font-weight: 500;
+}
+
+.stock-item.active:hover {
+  background-color: #c0c5cb;
 }
 </style> 
