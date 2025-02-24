@@ -1533,14 +1533,14 @@ def search_stocks():
 
         # 构建SQL查询
         sql = """
-            SELECT code, name, market
-            FROM stocks
-            WHERE code LIKE %s OR name LIKE %s
+            SELECT code, code_name as name, market
+            FROM stock.stocks
+            WHERE code LIKE %s OR code_name LIKE %s
             ORDER BY 
                 CASE 
                     WHEN code = %s THEN 1
                     WHEN code LIKE %s THEN 2
-                    WHEN name LIKE %s THEN 3
+                    WHEN code_name LIKE %s THEN 3
                     ELSE 4
                 END,
                 market,
