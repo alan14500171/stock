@@ -298,20 +298,28 @@ const submitForm = async () => {
     if (!validateForm() || submitting.value) return
 
     submitting.value = true
+    
+    // 计算总数量和总金额
+    const totalQuantity = form.value.details.reduce((sum, detail) => sum + (parseFloat(detail.quantity) || 0), 0)
+    const totalAmount = form.value.details.reduce((sum, detail) => sum + ((parseFloat(detail.quantity) || 0) * (parseFloat(detail.price) || 0)), 0)
+    
     const submitData = {
       transaction_date: form.value.transaction_date,
       stock_code: form.value.stock_code,
       transaction_code: form.value.transaction_code,
-      transaction_type: form.value.transaction_type.toUpperCase(),
+      transaction_type: form.value.transaction_type.toLowerCase(),
       details: form.value.details.map(d => ({
-        quantity: Number(d.quantity),
-        price: Number(d.price)
+        quantity: parseFloat(d.quantity) || 0,
+        price: parseFloat(d.price) || 0
       })),
-      broker_fee: Number(form.value.broker_fee) || 0,
-      transaction_levy: Number(form.value.transaction_levy) || 0,
-      stamp_duty: Number(form.value.stamp_duty) || 0,
-      trading_fee: Number(form.value.trading_fee) || 0,
-      deposit_fee: Number(form.value.deposit_fee) || 0
+      total_quantity: totalQuantity,
+      total_amount: totalAmount,
+      broker_fee: parseFloat(form.value.broker_fee) || 0,
+      transaction_levy: parseFloat(form.value.transaction_levy) || 0,
+      stamp_duty: parseFloat(form.value.stamp_duty) || 0,
+      trading_fee: parseFloat(form.value.trading_fee) || 0,
+      deposit_fee: parseFloat(form.value.deposit_fee) || 0,
+      market: form.value.market
     }
     
     const response = await axios.put(`/api/stock/transactions/${route.params.id}`, submitData)

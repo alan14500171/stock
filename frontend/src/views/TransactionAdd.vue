@@ -14,7 +14,6 @@
               type="text"
               class="form-control"
               v-model="form.transaction_date"
-              :ref="el => inputRefs.transaction_date.value = el"
               @blur="handleDateBlur"
               @keydown="handleKeyNavigation($event, 'transaction_date')"
               :class="{ 'is-invalid': errors.transaction_date }"
@@ -254,7 +253,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDateInput } from '../composables/useDateInput'
 import StockSelector from '../components/StockSelector.vue'
 import axios from 'axios'
 import useMessage from '../composables/useMessage'
@@ -283,23 +281,6 @@ const form = ref({
 
 // 错误信息
 const errors = ref({})
-
-// 日期处理
-const { 
-  displayValue: dateDisplayValue, 
-  handleInput: handleDateInputChange,
-  handleBlur: handleDateBlurChange,
-  validateDateString,
-  isValid: dateIsValid
-} = useDateInput('', {
-  onBlur: () => {
-    if (!dateIsValid.value) {
-      errors.value.transaction_date = '请输入有效的交易日期'
-    } else {
-      delete errors.value.transaction_date
-    }
-  }
-})
 
 // 修改 refs 对象的定义方式
 const inputRefs = {
@@ -336,15 +317,35 @@ const removeDetail = (index) => {
   }
 }
 
-// 修改日期处理相关代码
-const handleDateInput = (event) => {
-  const newValue = handleDateInputChange(event)
-  form.value.transaction_date = newValue
+// 添加日期验证函数
+const isValidDate = (dateString) => {
+  const date = new Date(dateString)
+  return date instanceof Date && !isNaN(date)
 }
 
-const handleDateBlur = () => {
-  const input = form.value.transaction_date
-  if (!input) return handleDateBlurChange()
+// 日期格式化函数
+const formatDate = (date) => {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// 修改日期处理相关代码
+const handleDateInput = (event) => {
+  const value = event.target.value
+  form.value.transaction_date = value
+}
+
+const handleDateBlur = (event) => {
+  const input = event.target.value.trim()
+  if (!input) {
+    form.value.transaction_date = ''
+    return
+  }
+
+  let formattedDate = null
 
   // 处理简单数字输入
   if (/^\d{1,2}$/.test(input)) {
@@ -353,19 +354,30 @@ const handleDateBlur = () => {
     const today = new Date()
     const year = today.getFullYear()
     const month = (today.getMonth() + 1).toString().padStart(2, '0')
-    form.value.transaction_date = `${year}-${month}-${day}`
+    formattedDate = `${year}-${month}-${day}`
   } else if (/^\d{1,2}-\d{1,2}$/.test(input)) {
     // 如果输入月-日格式，自动补充年份
     const [month, day] = input.split('-').map(num => num.padStart(2, '0'))
     const year = new Date().getFullYear()
-    form.value.transaction_date = `${year}-${month}-${day}`
+    formattedDate = `${year}-${month}-${day}`
   } else if (/^\d{1,2}-\d{1,2}-\d{2}$/.test(input)) {
     // 如果输入月-日-年格式（两位年份），自动补充为20xx
     const [month, day, shortYear] = input.split('-').map(num => num.padStart(2, '0'))
-    form.value.transaction_date = `20${shortYear}-${month}-${day}`
+    formattedDate = `20${shortYear}-${month}-${day}`
+  } else {
+    // 尝试解析标准日期格式
+    const date = new Date(input)
+    if (isValidDate(date)) {
+      formattedDate = formatDate(date)
+    }
   }
 
-  handleDateBlurChange()
+  if (formattedDate && isValidDate(formattedDate)) {
+    form.value.transaction_date = formattedDate
+    delete errors.value.transaction_date
+  } else {
+    errors.value.transaction_date = '请输入有效的交易日期'
+  }
 }
 
 // 表单验证
@@ -374,7 +386,7 @@ const validateForm = () => {
   let isValid = true
 
   // 验证日期
-  if (!form.value.transaction_date || !dateIsValid.value) {
+  if (!form.value.transaction_date || !isValidDate(form.value.transaction_date)) {
     errors.value.transaction_date = '请输入有效的交易日期'
     isValid = false
   }
@@ -484,15 +496,21 @@ const submitForm = async () => {
 
     submitting.value = true
     
+    // 计算总数量和总金额
+    const totalQuantity = form.value.details.reduce((sum, detail) => sum + (parseFloat(detail.quantity) || 0), 0)
+    const totalAmount = form.value.details.reduce((sum, detail) => sum + ((parseFloat(detail.quantity) || 0) * (parseFloat(detail.price) || 0)), 0)
+    
     const submitData = {
       transaction_date: form.value.transaction_date,
       stock_code: form.value.stock_code,
       transaction_code: form.value.transaction_code,
-      transaction_type: form.value.transaction_type.toUpperCase(),
+      transaction_type: form.value.transaction_type.toLowerCase(),
       details: form.value.details.map(d => ({
         quantity: parseFloat(d.quantity) || 0,
         price: parseFloat(d.price) || 0
       })),
+      total_quantity: totalQuantity,
+      total_amount: totalAmount,
       broker_fee: parseFloat(form.value.broker_fee) || 0,
       transaction_levy: parseFloat(form.value.transaction_levy) || 0,
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
@@ -598,47 +616,51 @@ onBeforeUnmount(() => {
 
 // 修改动态ref的处理
 const setQuantityRef = (el, index) => {
-  if (el) {
-    // 确保数组长度足够
-    while (inputRefs.quantityRefs.length <= index) {
-      inputRefs.quantityRefs.push(null);
-    }
-    inputRefs.quantityRefs[index] = el;
+  if (!inputRefs.quantityRefs) {
+    inputRefs.quantityRefs = []
   }
+  // 确保数组长度足够
+  while (inputRefs.quantityRefs.length <= index) {
+    inputRefs.quantityRefs.push(null)
+  }
+  inputRefs.quantityRefs[index] = el
 }
 
 const setPriceRef = (el, index) => {
-  if (el) {
-    // 确保数组长度足够
-    while (inputRefs.priceRefs.length <= index) {
-      inputRefs.priceRefs.push(null);
-    }
-    inputRefs.priceRefs[index] = el;
+  if (!inputRefs.priceRefs) {
+    inputRefs.priceRefs = []
   }
+  // 确保数组长度足够
+  while (inputRefs.priceRefs.length <= index) {
+    inputRefs.priceRefs.push(null)
+  }
+  inputRefs.priceRefs[index] = el
 }
 
 // 监听明细数量变化，更新refs数组
 watch(() => form.value.details.length, (newLength) => {
   nextTick(() => {
-    // 重置refs数组并保持现有的引用
-    const newQuantityRefs = new Array(newLength).fill(null);
-    const newPriceRefs = new Array(newLength).fill(null);
+    // 重置refs数组
+    if (!inputRefs.quantityRefs) {
+      inputRefs.quantityRefs = []
+    }
+    if (!inputRefs.priceRefs) {
+      inputRefs.priceRefs = []
+    }
     
-    // 复制现有的引用
-    inputRefs.quantityRefs.forEach((ref, index) => {
-      if (index < newLength) {
-        newQuantityRefs[index] = ref;
+    // 调整数组长度
+    inputRefs.quantityRefs.length = newLength
+    inputRefs.priceRefs.length = newLength
+    
+    // 初始化新的元素为 null
+    for (let i = 0; i < newLength; i++) {
+      if (!inputRefs.quantityRefs[i]) {
+        inputRefs.quantityRefs[i] = null
       }
-    });
-    
-    inputRefs.priceRefs.forEach((ref, index) => {
-      if (index < newLength) {
-        newPriceRefs[index] = ref;
+      if (!inputRefs.priceRefs[i]) {
+        inputRefs.priceRefs[i] = null
       }
-    });
-    
-    inputRefs.quantityRefs = newQuantityRefs;
-    inputRefs.priceRefs = newPriceRefs;
+    }
   })
 })
 
@@ -647,12 +669,14 @@ const handleKeyNavigation = (event, fieldName) => {
   // Enter键导航逻辑
   if (event.key === 'Enter') {
     event.preventDefault();
-    console.log('Enter键导航 - 当前字段:', fieldName);
-
+    
     // 处理动态字段的导航
     if (fieldName.startsWith('quantity_')) {
       const index = parseInt(fieldName.split('_')[1]);
-      inputRefs.priceRefs[index]?.focus();
+      const priceInput = inputRefs.priceRefs[index];
+      if (priceInput) {
+        priceInput.focus();
+      }
       return;
     }
     
@@ -660,7 +684,10 @@ const handleKeyNavigation = (event, fieldName) => {
       // 如果是最后一行的价格，跳转到经纪佣金
       const index = parseInt(fieldName.split('_')[1]);
       if (index === form.value.details.length - 1) {
-        inputRefs.broker_fee.value?.focus();
+        const brokerFeeInput = inputRefs.broker_fee.value;
+        if (brokerFeeInput) {
+          brokerFeeInput.focus();
+        }
       }
       return;
     }
@@ -669,30 +696,42 @@ const handleKeyNavigation = (event, fieldName) => {
     const enterKeyMap = {
       'transaction_date': () => inputRefs.stock_code.value?.focus(),
       'stock_code': () => inputRefs.transaction_code.value?.focus(),
-      'transaction_code': () => inputRefs.quantityRefs[0]?.focus(),
+      'transaction_code': () => {
+        const firstQuantityInput = inputRefs.quantityRefs[0];
+        if (firstQuantityInput) {
+          firstQuantityInput.focus();
+        }
+      },
       'broker_fee': () => inputRefs.transaction_levy.value?.focus(),
       'transaction_levy': () => inputRefs.stamp_duty.value?.focus(),
       'stamp_duty': () => inputRefs.trading_fee.value?.focus(),
       'trading_fee': () => inputRefs.deposit_fee.value?.focus(),
-      'deposit_fee': () => inputRefs.saveAndAddBtn.value?.click()
+      'deposit_fee': () => {
+        const saveAndAddBtn = inputRefs.saveAndAddBtn.value;
+        if (saveAndAddBtn) {
+          saveAndAddBtn.click();
+        }
+      }
     };
 
     // 执行Enter键导航
-    if (enterKeyMap[fieldName]) {
-      enterKeyMap[fieldName]();
+    const handler = enterKeyMap[fieldName];
+    if (handler) {
+      handler();
     }
-    return;
   }
 
   // Tab键导航逻辑
   if (event.key === 'Tab') {
     event.preventDefault();
-    console.log('Tab键导航 - 当前字段:', fieldName);
-
+    
     // 处理动态字段的Tab导航
     if (fieldName.startsWith('quantity_')) {
       const index = parseInt(fieldName.split('_')[1]);
-      inputRefs.priceRefs[index]?.focus();
+      const priceInput = inputRefs.priceRefs[index];
+      if (priceInput) {
+        priceInput.focus();
+      }
       return;
     }
     
@@ -701,7 +740,10 @@ const handleKeyNavigation = (event, fieldName) => {
       addDetail();
       nextTick(() => {
         const newIndex = form.value.details.length - 1;
-        inputRefs.quantityRefs[newIndex]?.focus();
+        const newQuantityInput = inputRefs.quantityRefs[newIndex];
+        if (newQuantityInput) {
+          newQuantityInput.focus();
+        }
       });
       return;
     }
@@ -710,7 +752,12 @@ const handleKeyNavigation = (event, fieldName) => {
     const tabKeyMap = {
       'transaction_date': () => inputRefs.stock_code.value?.focus(),
       'stock_code': () => inputRefs.transaction_code.value?.focus(),
-      'transaction_code': () => inputRefs.quantityRefs[0]?.focus(),
+      'transaction_code': () => {
+        const firstQuantityInput = inputRefs.quantityRefs[0];
+        if (firstQuantityInput) {
+          firstQuantityInput.focus();
+        }
+      },
       'broker_fee': () => inputRefs.transaction_levy.value?.focus(),
       'transaction_levy': () => inputRefs.stamp_duty.value?.focus(),
       'stamp_duty': () => inputRefs.trading_fee.value?.focus(),
@@ -719,8 +766,9 @@ const handleKeyNavigation = (event, fieldName) => {
     };
 
     // 执行Tab键导航
-    if (tabKeyMap[fieldName]) {
-      tabKeyMap[fieldName]();
+    const handler = tabKeyMap[fieldName];
+    if (handler) {
+      handler();
     }
   }
 };
