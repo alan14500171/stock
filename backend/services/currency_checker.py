@@ -68,15 +68,16 @@ class CurrencyChecker:
         # 如果输入的是纯数字，优先尝试港股市场
         if code.isdigit():
             codes_to_try = set()  # 使用集合去重
-            codes_to_try.add(code)  # 保持原始输入
             
             # 处理不同长度的数字
             if len(code) <= 3:
-                # 补0到4位
+                # 补0到4位用于查询
                 codes_to_try.add(code.zfill(4))
             elif len(code) == 5 and code.startswith('0'):
                 # 如果是5位数且以0开头，尝试去掉前导0
                 codes_to_try.add(code[1:])
+            elif len(code) == 4:
+                codes_to_try.add(code)
             
             # 优先尝试港股市场
             for try_code in codes_to_try:
@@ -110,7 +111,7 @@ class CurrencyChecker:
                             'price': price,
                             'query': query,
                             'code_name': stock_name,
-                            'code': try_code
+                            'code': original_code  # 保持原始代码
                         })
                         # 如果找到了港股，直接返回结果
                         if results:
@@ -154,7 +155,7 @@ class CurrencyChecker:
                         'price': price,
                         'query': query,
                         'code_name': stock_name,
-                        'code': original_code
+                        'code': original_code  # 保持原始代码
                     })
             except Exception as e:
                 logger.error(f"搜索市场 {market} 时发生错误: {str(e)}")

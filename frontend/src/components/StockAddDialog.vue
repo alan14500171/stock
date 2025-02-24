@@ -132,19 +132,6 @@ const form = ref({
   current_price: null
 })
 
-// 添加股票代码格式化函数
-const formatStockCode = (code, market = '') => {
-  // 如果是港股市场，进行数字格式化
-  if (market === 'HK' || market.includes('HKG')) {
-    // 移除所有非数字字符
-    const numericCode = code.replace(/\D/g, '')
-    // 统一补齐4位
-    return numericCode.padStart(4, '0')
-  }
-  // 非港股市场，保持原样
-  return code.trim()
-}
-
 const resetFormExceptCode = () => {
   const currentCode = form.value.code
   form.value = {
@@ -177,83 +164,55 @@ const handleCodeEnter = async (event) => {
     return
   }
   
-  if (stockSelected.value) {
-    // 如果已经选择了有效的股票，直接返回
-    return
-  }
-  
   errors.value = {}
   alertMessage.value = ''
   
-  let queryCode = form.value.code.trim()
-  
   try {
-    // 使用 search_stock 接口遍历不同市场
-    const response = await axios.get(`/api/stock/search_stock?code=${queryCode}`)
+    // 查询股票信息
+    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(form.value.code)}`)
     
     if (response.data.success && response.data.data.length > 0) {
-      const stockData = response.data.data[0] // 使用第一个匹配结果
-      
-      // 设置市场
+      const stockData = response.data.data[0]
       stockData.market = stockData.market === 'HK' || stockData.exchange === 'HKG' ? 'HK' : 'USA'
 
-      // 检查是否已存在
+      // 检查股票是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
-          search: stockData.code
+          search: form.value.code
         }
       })
       
       if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
         const existingStock = checkResponse.data.data.items.find(
-          stock => stock.code === stockData.code && stock.market === stockData.market
+          stock => stock.code === form.value.code
         )
         if (existingStock) {
           alertMessage.value = '该股票代码已存在'
           resetFormExceptCode()
-          const codeInput = document.querySelector('.modal-body input[type="text"]')
-          if (codeInput) {
-            codeInput.focus()
-          }
           return
         }
       }
 
-      // 更新表单数据
+      // 更新表单数据,保持原始代码
       form.value.current_price = stockData.price
       form.value.google_code = stockData.query
       form.value.name = stockData.code_name || ''
       form.value.market = stockData.market
-      form.value.code = stockData.code
       
       if (form.value.name) {
-        stockSelected.value = true  // 标记股票已被选择
+        stockSelected.value = true
       }
       
       if (!form.value.name) {
         errors.value.name = '未能获取公司名称'
       }
-      
-      // 将焦点设置到确认添加按钮
-      const submitButton = document.querySelector('.modal-footer .btn-primary')
-      if (submitButton) {
-        submitButton.focus()
-      }
     } else {
       alertMessage.value = '未找到股票信息，请检查股票代码是否正确'
       resetFormExceptCode()
-      const codeInput = document.querySelector('.modal-body input[type="text"]')
-      if (codeInput) {
-        codeInput.focus()
-      }
     }
   } catch (error) {
     alertMessage.value = '查询失败，请检查股票代码是否正确'
     resetFormExceptCode()
-    const codeInput = document.querySelector('.modal-body input[type="text"]')
-    if (codeInput) {
-      codeInput.focus()
-    }
   }
 }
 
@@ -278,7 +237,7 @@ const resetForm = () => {
   }
   errors.value = {}
   alertMessage.value = ''
-  stockSelected.value = false  // 重置股票选择状态
+  stockSelected.value = false
 }
 
 // 表单验证
@@ -303,17 +262,6 @@ const validateForm = () => {
     isValid = false
   }
 
-  // 检查股票代码格式
-  if (form.value.code) {
-    if (form.value.market === 'HK' && !/^\d{1,4}$/.test(form.value.code)) {
-      errors.value.code = '港股代码必须为1-4位数字'
-      isValid = false
-    } else if (form.value.market === 'USA' && !/^[A-Za-z0-9.]{1,5}$/.test(form.value.code)) {
-      errors.value.code = '美股代码必须为1-5位字母数字'
-      isValid = false
-    }
-  }
-
   return isValid
 }
 
@@ -326,12 +274,13 @@ const handleClose = () => {
 // 监听 editData 变化
 watch(() => props.editData, (newData) => {
   if (newData) {
+    // 直接使用原始数据,不做任何格式处理
     form.value = {
-      code: newData.code || '',
-      market: newData.market || '',
-      name: newData.code_name || '',
-      google_code: newData.google_name || '',
-      current_price: newData.current_price || null
+      code: newData.code,
+      market: newData.market,
+      name: newData.code_name,
+      google_code: newData.google_name,
+      current_price: newData.current_price
     }
     stockSelected.value = true
   } else {
@@ -339,7 +288,7 @@ watch(() => props.editData, (newData) => {
   }
 }, { immediate: true })
 
-// 修改提交表单方法
+// 修改提交表单方法 - 保持原始股票代码格式,不做任何处理
 const handleSubmit = async () => {
   if (!validateForm() || submitting.value) return
 
@@ -347,9 +296,8 @@ const handleSubmit = async () => {
   
   try {
     if (props.editData) {
-      // 编辑模式
       const stock = {
-        code: form.value.code,
+        code: form.value.code, // 直接使用原始输入的代码,不做格式化
         market: form.value.market,
         code_name: form.value.name,
         google_name: form.value.google_code,
@@ -366,28 +314,8 @@ const handleSubmit = async () => {
         message.error(response.data.message || '更新股票失败')
       }
     } else {
-      // 添加模式
-      // 直接使用原始代码，不进行格式化
-      const checkResponse = await axios.get('/api/stock/stocks', {
-        params: {
-          search: form.value.code
-        }
-      })
-      
-      if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
-        const existingStock = checkResponse.data.data.items.find(
-          stock => stock.code === form.value.code
-        )
-        if (existingStock) {
-          message.warning('该股票代码已存在')
-          form.value.current_price = null
-          submitting.value = false
-          return
-        }
-      }
-
       const stock = {
-        code: form.value.code,
+        code: form.value.code, // 直接使用原始输入的代码,不做格式化
         market: form.value.market,
         code_name: form.value.name,
         google_name: form.value.google_code,
