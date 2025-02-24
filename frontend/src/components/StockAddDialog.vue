@@ -111,6 +111,7 @@ const message = useMessage()
 const submitting = ref(false)
 const errors = ref({})
 const alertMessage = ref('')
+const stockSelected = ref(false)
 
 // 表单数据
 const form = ref({
@@ -166,6 +167,11 @@ const handleCodeEnter = async (event) => {
     return
   }
   
+  if (stockSelected.value) {
+    // 如果已经选择了有效的股票，直接返回
+    return
+  }
+  
   errors.value = {}
   alertMessage.value = ''
   
@@ -207,6 +213,10 @@ const handleCodeEnter = async (event) => {
       form.value.market = stockData.market
       form.value.code = stockData.code
       
+      if (form.value.name) {
+        stockSelected.value = true  // 标记股票已被选择
+      }
+      
       if (!form.value.name) {
         errors.value.name = '未能获取公司名称'
       }
@@ -238,6 +248,9 @@ const handleCodeEnter = async (event) => {
 watch(() => form.value.code, (newCode) => {
   if (!newCode) {
     resetForm()
+  } else if (stockSelected.value) {
+    // 如果已经选择了股票，且代码发生变化，重置选择状态
+    stockSelected.value = false
   }
 })
 
@@ -252,6 +265,7 @@ const resetForm = () => {
   }
   errors.value = {}
   alertMessage.value = ''
+  stockSelected.value = false  // 重置股票选择状态
 }
 
 // 表单验证
