@@ -205,7 +205,7 @@ def add_transaction():
                     stamp_duty, trading_fee, deposit_fee, total_fees,
                     net_amount, prev_quantity, prev_cost, prev_avg_cost,
                     current_quantity, current_cost, current_avg_cost,
-                    realized_pnl, realized_pnl_ratio, created_at, updated_at
+                    realized_profit, profit_rate, created_at, updated_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -235,8 +235,8 @@ def add_transaction():
                 changes['current_quantity'],
                 changes['current_cost'],
                 changes['current_avg_cost'],
-                changes['realized_pnl'],
-                changes['realized_pnl_ratio']
+                changes['realized_profit'],
+                changes['profit_rate']
             ]
             
             result = db.execute(insert_sql, params)
@@ -355,8 +355,8 @@ def update_transaction(id):
                     current_quantity = %s,
                     current_cost = %s,
                     current_avg_cost = %s,
-                    realized_pnl = %s,
-                    realized_pnl_ratio = %s,
+                    realized_profit = %s,
+                    profit_rate = %s,
                     updated_at = NOW()
                 WHERE id = %s AND user_id = %s
             """
@@ -382,8 +382,8 @@ def update_transaction(id):
                 changes['current_quantity'],
                 changes['current_cost'],
                 changes['current_avg_cost'],
-                changes['realized_pnl'],
-                changes['realized_pnl_ratio'],
+                changes['realized_profit'],
+                changes['profit_rate'],
                 id,
                 session['user_id']
             ]

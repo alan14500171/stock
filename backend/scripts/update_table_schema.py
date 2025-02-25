@@ -29,18 +29,18 @@ def update_table_schema():
         # 添加新字段
         alter_table_sql = """
             ALTER TABLE stock.stock_transactions
-            ADD COLUMN IF NOT EXISTS realized_pnl DECIMAL(20,5) DEFAULT 0.00000 COMMENT '已实现盈亏',
-            ADD COLUMN IF NOT EXISTS realized_pnl_ratio DECIMAL(10,5) DEFAULT 0.00000 COMMENT '盈亏比率（%）'
+            ADD COLUMN IF NOT EXISTS realized_profit DECIMAL(20,5) DEFAULT 0.00000 COMMENT '已实现盈亏',
+            ADD COLUMN IF NOT EXISTS profit_rate DECIMAL(10,5) DEFAULT 0.00000 COMMENT '盈亏比率（%）'
         """
         db.execute(alter_table_sql)
         
         # 更新现有记录的默认值
         update_records_sql = """
             UPDATE stock.stock_transactions
-            SET realized_pnl = 0.00000,
-                realized_pnl_ratio = 0.00000
-            WHERE realized_pnl IS NULL
-               OR realized_pnl_ratio IS NULL
+            SET realized_profit = 0.00000,
+                profit_rate = 0.00000
+            WHERE realized_profit IS NULL
+               OR profit_rate IS NULL
         """
         db.execute(update_records_sql)
         

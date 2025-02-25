@@ -65,7 +65,7 @@
             class="form-control form-control-sm"
             v-model="searchForm.transactionCode"
             ref="transactionCode"
-            @keydown.enter.prevent="search"
+            @keydown.enter.prevent="searchAndClear"
             @keydown.tab="focusNext($event, 'search')"
             placeholder="输入交易编号"
             data-testid="transaction-code-input"
@@ -562,6 +562,11 @@ const toggleSearch = () => {
 const search = () => {
   currentPage.value = 1
   fetchTransactions()
+}
+
+const searchAndClear = () => {
+  search()
+  searchForm.value.transactionCode = ''
 }
 
 const resetSearch = () => {

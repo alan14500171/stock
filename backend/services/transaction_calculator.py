@@ -40,8 +40,8 @@ class TransactionCalculator:
             'prev_quantity': prev_quantity,
             'prev_cost': prev_cost,
             'prev_avg_cost': prev_avg_cost,
-            'realized_pnl': Decimal('0'),
-            'realized_pnl_ratio': Decimal('0'),
+            'realized_profit': Decimal('0'),
+            'profit_rate': Decimal('0'),
             'total_fees': total_fees,
             'net_amount': Decimal('0')
         }
@@ -66,8 +66,8 @@ class TransactionCalculator:
             # 计算已实现盈亏
             if prev_avg_cost > 0:
                 cost_basis = prev_avg_cost * total_quantity
-                result['realized_pnl'] = total_amount - cost_basis - total_fees
-                result['realized_pnl_ratio'] = (result['realized_pnl'] / cost_basis * 100
+                result['realized_profit'] = total_amount - cost_basis - total_fees
+                result['profit_rate'] = (result['realized_profit'] / cost_basis * 100
                                               if cost_basis > 0 else Decimal('0'))
             
             # 更新成本
@@ -215,8 +215,8 @@ class TransactionCalculator:
                         current_quantity = %s,
                         current_cost = %s,
                         current_avg_cost = %s,
-                        realized_pnl = %s,
-                        realized_pnl_ratio = %s,
+                        realized_profit = %s,
+                        profit_rate = %s,
                         updated_at = NOW()
                     WHERE id = %s
                 """
@@ -227,8 +227,8 @@ class TransactionCalculator:
                     new_state['current_quantity'],
                     new_state['current_cost'],
                     new_state['current_avg_cost'],
-                    new_state['realized_pnl'],
-                    new_state['realized_pnl_ratio'],
+                    new_state['realized_profit'],
+                    new_state['profit_rate'],
                     trans['id']
                 ])
                 
