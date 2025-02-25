@@ -151,6 +151,12 @@
                 <td class="text-end">{{ formatNumber(transaction.total_fees) }}</td>
                 <td class="text-end" :class="{'text-danger': transaction.transaction_type === 'BUY', 'text-success': transaction.transaction_type === 'SELL'}">
                   {{ transaction.transaction_type === 'BUY' ? '-' : '' }}{{ formatNumber(transaction.net_amount) }}
+                  <template v-if="transaction.deposit_fee > 0">
+                    <br>
+                    <small :class="{'text-danger': transaction.transaction_type === 'BUY', 'text-success': transaction.transaction_type === 'SELL'}">
+                      ({{ transaction.transaction_type === 'BUY' ? '-' : '' }}{{ formatNumber(transaction.net_amount - transaction.deposit_fee) }})
+                    </small>
+                  </template>
                 </td>
                 <td>
                   <div class="d-flex justify-content-end gap-1">
