@@ -65,9 +65,10 @@
             class="form-control form-control-sm"
             v-model="searchForm.transactionCode"
             ref="transactionCode"
-            @keydown.enter.prevent="focusNext($event, 'search')"
+            @keydown.enter.prevent="search"
             @keydown.tab="focusNext($event, 'search')"
             placeholder="输入交易编号"
+            data-testid="transaction-code-input"
           />
         </div>
         <div class="col" style="min-width: 200px;">
