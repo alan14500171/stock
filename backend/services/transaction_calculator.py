@@ -138,7 +138,8 @@ class TransactionCalculator:
     def get_previous_state(db, user_id, stock_code, market, transaction_date, transaction_id=None):
         """获取交易之前的持仓状态"""
         sql = """
-            SELECT current_quantity as quantity,
+            SELECT id,
+                   current_quantity as quantity,
                    current_cost as cost,
                    current_avg_cost as avg_cost
             FROM stock.stock_transactions 
@@ -159,11 +160,13 @@ class TransactionCalculator:
         result = db.fetch_one(sql, params)
         if result:
             return {
+                'id': result['id'],
                 'quantity': Decimal(str(result['quantity'])),
                 'cost': Decimal(str(result['cost'])),
                 'avg_cost': Decimal(str(result['avg_cost']))
             }
         return {
+            'id': 0,
             'quantity': Decimal('0'),
             'cost': Decimal('0'),
             'avg_cost': Decimal('0')

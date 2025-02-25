@@ -479,10 +479,10 @@ def delete_transaction(id):
                     'message': '删除交易记录失败'
                 }), 500
             
-            # 更新后续交易记录
+            # 更新后续交易记录，使用前一条交易的状态作为起始状态
             if not TransactionCalculator.update_subsequent_transactions(
                 db, session['user_id'], transaction['stock_code'],
-                transaction['market'], transaction['transaction_date'], id
+                transaction['market'], transaction['transaction_date'], prev_state['id'] if prev_state else 0
             ):
                 db.execute("ROLLBACK")
                 return jsonify({
