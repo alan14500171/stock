@@ -1,15 +1,11 @@
 <template>
   <div class="stock-selector" data-testid="stock-selector-container">
-    <div class="selected-items form-control" data-testid="selected-items-container" @click="showDropdown = !showDropdown">
+    <div class="selected-items form-control" data-testid="selected-items-container" @click="handleContainerClick">
       <div v-for="code in modelValue" :key="code" class="selected-tag" :data-testid="'selected-tag-' + code">
         {{ getStockLabel(code) }}
         <button type="button" class="btn-close" @click.stop="removeStock(code)" :data-testid="'remove-stock-btn-' + code"></button>
       </div>
-      <small v-if="modelValue.length === 0" class="text-muted" data-testid="empty-placeholder">{{ placeholder }}</small>
-    </div>
-    <div class="dropdown-menu" :class="{ show: showDropdown }" data-testid="dropdown-menu">
-      <!-- 搜索框 -->
-      <div class="search-container" data-testid="search-container">
+      <div class="search-container" v-show="showDropdown || modelValue.length === 0">
         <input
           type="text"
           class="search-input"
@@ -18,13 +14,14 @@
           @keydown.enter.prevent="handleEnter"
           @keydown.up.prevent="navigateList('up')"
           @keydown.down.prevent="navigateList('down')"
-          :placeholder="'搜索股票代码或名称...'"
+          :placeholder="placeholder"
           ref="input"
-          @click="handleInputClick"
+          @click.stop="handleInputClick"
           data-testid="stock-search-input"
         />
       </div>
-
+    </div>
+    <div class="dropdown-menu" :class="{ show: showDropdown }" data-testid="dropdown-menu">
       <!-- 全选/取消全选和清空选择 -->
       <div class="dropdown-header d-flex justify-content-between align-items-center" data-testid="dropdown-header">
         <div class="select-all">
@@ -71,8 +68,8 @@
               :checked="isSelected(stock.code)"
               :data-testid="'stock-checkbox-' + stock.code"
             >
-            <span :data-testid="'stock-code-' + stock.code">{{ stock.code }}</span> - 
-            <span :data-testid="'stock-name-' + stock.code">{{ stock.name }}</span>
+            <span class="stock-code" :data-testid="'stock-code-' + stock.code">{{ stock.code }}</span>
+            <span class="stock-name" :data-testid="'stock-name-' + stock.code">{{ stock.code_name || stock.name || '' }}</span>
           </a>
         </template>
         <div v-else class="dropdown-item text-muted" data-testid="no-results">
@@ -113,8 +110,6 @@ const emit = defineEmits(['update:modelValue', 'enter'])
 const searchText = ref('')
 const showDropdown = ref(false)
 const input = ref(null)
-
-// 添加键盘导航相关的状态
 const currentIndex = ref(-1)
 
 // 计算过滤后的股票列表
@@ -127,7 +122,7 @@ const filteredStocks = computed(() => {
     const searchValue = searchText.value.toLowerCase()
     result = result.filter(stock => 
       stock.code.toLowerCase().includes(searchValue) || 
-      stock.name.toLowerCase().includes(searchValue)
+      (stock.name && stock.name.toLowerCase().includes(searchValue))
     )
   }
   return result
@@ -147,7 +142,9 @@ const isIndeterminate = computed(() => {
 // 获取股票显示标签
 const getStockLabel = (code) => {
   const stock = props.stocks.find(s => s.code === code)
-  return stock ? `${stock.code} - ${stock.name}` : code
+  if (!stock) return code
+  const name = stock.code_name || stock.name || ''
+  return `${stock.code} - ${name}`
 }
 
 // 检查股票是否已选中
@@ -180,58 +177,28 @@ const toggleSelectAll = () => {
 // 清空所有选择
 const clearSelected = () => {
   emit('update:modelValue', [])
+  searchText.value = ''
+  showDropdown.value = false
 }
 
-// 切换单个股票选中状态
-const toggleStock = (stock) => {
-  const newValue = [...props.modelValue]
-  const index = newValue.indexOf(stock.code)
-  if (index === -1) {
-    newValue.push(stock.code)
-  } else {
-    newValue.splice(index, 1)
-  }
+// 删除已选择的股票
+const removeStock = (code) => {
+  const newValue = props.modelValue.filter(item => item !== code)
   emit('update:modelValue', newValue)
 }
 
-// 处理键盘导航
-const navigateList = (direction) => {
-  if (!showDropdown.value || filteredStocks.value.length === 0) {
-    return
-  }
-
-  if (direction === 'up') {
-    currentIndex.value = currentIndex.value <= 0 
-      ? filteredStocks.value.length - 1 
-      : currentIndex.value - 1
-  } else {
-    currentIndex.value = currentIndex.value >= filteredStocks.value.length - 1 
-      ? 0 
-      : currentIndex.value + 1
-  }
-
-  // 确保当前选中项在可视区域内
-  const stockList = document.querySelector('.stock-list')
-  const activeItem = stockList.querySelector('.dropdown-item.active')
-  if (activeItem) {
-    activeItem.scrollIntoView({ block: 'nearest' })
-  }
+// 处理容器点击
+const handleContainerClick = () => {
+  showDropdown.value = true
+  nextTick(() => {
+    input.value?.focus()
+  })
 }
 
-// 处理回车键
-const handleEnter = (event) => {
-  if (showDropdown.value && filteredStocks.value.length > 0) {
-    event.preventDefault()
-    if (currentIndex.value >= 0) {
-      // 如果有选中的项，则选择该项
-      toggleStock(filteredStocks.value[currentIndex.value])
-      showDropdown.value = false
-      searchText.value = ''
-      return
-    }
-  }
-  // 如果没有下拉选项或没有选中项，则触发 enter 事件
-  emit('enter', event)
+// 处理输入框点击
+const handleInputClick = (event) => {
+  event.stopPropagation()
+  showDropdown.value = true
 }
 
 // 处理输入
@@ -253,26 +220,65 @@ const handleInput = (event) => {
   }
 }
 
-// 监听下拉框显示状态
-watch(showDropdown, (newValue) => {
-  if (!newValue) {
-    currentIndex.value = -1  // 关闭下拉框时重置选中索引
-    searchText.value = ''
+// 处理回车键
+const handleEnter = (event) => {
+  if (showDropdown.value && filteredStocks.value.length > 0) {
+    event.preventDefault()
+    if (currentIndex.value >= 0) {
+      handleStockSelect(filteredStocks.value[currentIndex.value])
+    } else if (filteredStocks.value.length === 1) {
+      handleStockSelect(filteredStocks.value[0])
+    }
+  } else {
+    emit('enter', event)
   }
-})
-
-// 删除已选择的股票
-const removeStock = (code) => {
-  const newValue = props.modelValue.filter(item => item !== code)
-  emit('update:modelValue', newValue)
 }
 
-// 处理输入框点击
-const handleInputClick = (event) => {
-  event.stopPropagation()
-  if (!showDropdown.value) {
-    showDropdown.value = true
+// 处理股票选择
+const handleStockSelect = (stock) => {
+  const newValue = [...props.modelValue]
+  const index = newValue.indexOf(stock.code)
+  
+  if (index === -1) {
+    newValue.push(stock.code)
+  } else {
+    newValue.splice(index, 1)
   }
+  
+  emit('update:modelValue', newValue)
+  searchText.value = ''
+  
+  // 保持下拉框打开状态
+  showDropdown.value = true
+  nextTick(() => {
+    input.value?.focus()
+  })
+}
+
+// 键盘导航
+const navigateList = (direction) => {
+  if (!showDropdown.value || filteredStocks.value.length === 0) {
+    return
+  }
+
+  if (direction === 'up') {
+    currentIndex.value = currentIndex.value <= 0 
+      ? filteredStocks.value.length - 1 
+      : currentIndex.value - 1
+  } else {
+    currentIndex.value = currentIndex.value >= filteredStocks.value.length - 1 
+      ? 0 
+      : currentIndex.value + 1
+  }
+
+  // 确保当前选中项在可视区域内
+  nextTick(() => {
+    const stockList = document.querySelector('.stock-list')
+    const activeItem = stockList?.querySelector('.dropdown-item.active')
+    if (activeItem) {
+      activeItem.scrollIntoView({ block: 'nearest' })
+    }
+  })
 }
 
 // 点击外部关闭下拉框
@@ -283,12 +289,13 @@ const handleClickOutside = (event) => {
   }
 }
 
-// 添加新的方法处理股票选择
-const handleStockSelect = (stock) => {
-  toggleStock(stock)
-  showDropdown.value = false
-  searchText.value = ''
-}
+// 监听下拉框显示状态
+watch(showDropdown, (newValue) => {
+  if (!newValue) {
+    currentIndex.value = -1
+    searchText.value = ''
+  }
+})
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
@@ -313,24 +320,24 @@ onBeforeUnmount(() => {
   min-height: calc(1.5em + 0.75rem + 2px);
   max-height: calc(4.5em + 0.75rem + 2px);
   padding: 0.25rem;
-  cursor: pointer;
+  cursor: text;
   background-color: #fff;
   align-items: flex-start;
   overflow-y: auto;
 }
 
-.selected-items::-webkit-scrollbar {
-  width: 4px;
+.search-container {
+  flex: 1;
+  min-width: 100px;
 }
 
-.selected-items::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.selected-items::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 4px;
+.search-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 0.25rem;
+  font-size: 0.875rem;
+  background: transparent;
 }
 
 .selected-tag {
@@ -363,24 +370,6 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-.search-input {
-  width: 100%;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: #212529;
-  background-color: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.25rem;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.search-input:focus {
-  border-color: #80bdff;
-  outline: 0;
-  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
-}
-
 .dropdown-menu {
   width: 100%;
   margin-top: 1px;
@@ -396,47 +385,17 @@ onBeforeUnmount(() => {
   display: flex;
 }
 
-.dropdown-menu::-webkit-scrollbar {
-  width: 6px;
-}
-
-.dropdown-menu::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.dropdown-menu::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 3px;
-}
-
-.sticky-top {
-  position: sticky;
-  top: 0;
-  background-color: #fff;
-  z-index: 1;
-  border-bottom: 1px solid #dee2e6;
-}
-
 .dropdown-header {
   font-size: 0.75rem;
   color: #6c757d;
   padding: 0.5rem 0.75rem;
   background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
 }
 
-.select-all {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-.select-all input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.dropdown-divider {
-  margin: 0;
-  border-color: #dee2e6;
+.stock-list {
+  overflow-y: auto;
+  max-height: 300px;
 }
 
 .dropdown-item {
@@ -453,72 +412,30 @@ onBeforeUnmount(() => {
   background-color: #f8f9fa;
 }
 
-.dropdown-item input[type="checkbox"] {
-  cursor: pointer;
+.dropdown-item.active {
+  background-color: #e9ecef;
+}
+
+.stock-code {
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.stock-name {
+  color: #6c757d;
 }
 
 .form-check-input {
-  margin: 0;
-}
-
-.stock-list {
-  overflow-y: auto;
-  flex: 1;
-}
-
-.gap-3 {
-  gap: 0.75rem;
+  margin-right: 0.5rem;
 }
 
 .btn-link {
   text-decoration: none;
   font-size: 0.75rem;
-  cursor: pointer;
+  padding: 0;
 }
 
 .btn-link:hover {
   text-decoration: underline;
-}
-
-.text-danger {
-  color: #dc3545;
-}
-
-.text-danger:hover {
-  color: #bb2d3b;
-}
-
-.dropdown-item.active {
-  background-color: #e2e6ea;
-  color: #212529;
-}
-
-.dropdown-item:hover {
-  background-color: #e9ecef;
-}
-
-.dropdown-item.active:hover {
-  background-color: #d4d9dd;
-}
-
-.stock-item {
-  display: block;
-  padding: 0.5rem;
-  color: #212529;
-  text-decoration: none;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.stock-item:last-child {
-  border-bottom: none;
-}
-
-.stock-item:hover,
-.stock-item.active {
-  background-color: #e2e6ea;
-}
-
-.stock-item:active {
-  background-color: #d4d9dd;
 }
 </style> 
