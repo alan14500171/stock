@@ -714,8 +714,18 @@ def get_stocks():
         search = request.args.get('search')
         
         # 构建SQL查询
-        sql = "SELECT * FROM stocks WHERE 1=1"
-        params = []
+        sql = """
+            SELECT s.*, 
+                   CASE 
+                       WHEN s.code = %s THEN 1
+                       WHEN s.code LIKE %s THEN 2
+                       WHEN s.code_name LIKE %s THEN 3
+                       ELSE 4
+                   END as match_priority
+            FROM stocks s
+            WHERE 1=1
+        """
+        params = [search or '', f"{search}%" if search else "%", f"%{search}%" if search else "%"]
         
         if market:
             sql += " AND market = %s"
@@ -727,12 +737,22 @@ def get_stocks():
             params.extend([search_pattern, search_pattern])
             
         # 计算总记录数
-        count_sql = sql.replace("SELECT *", "SELECT COUNT(*)")
-        total_result = db.fetch_one(count_sql, params)
+        count_sql = "SELECT COUNT(*) FROM stocks WHERE 1=1"
+        count_params = []
+        
+        if market:
+            count_sql += " AND market = %s"
+            count_params.append(market)
+            
+        if search:
+            count_sql += " AND (code LIKE %s OR code_name LIKE %s)"
+            count_params.extend([search_pattern, search_pattern])
+        
+        total_result = db.fetch_one(count_sql, count_params)
         total = total_result['COUNT(*)'] if total_result else 0
         
         # 添加排序和分页
-        sql += " ORDER BY market, code LIMIT %s OFFSET %s"
+        sql += " ORDER BY match_priority, market, code LIMIT %s OFFSET %s"
         params.extend([per_page, (page - 1) * per_page])
         
         # 执行查询

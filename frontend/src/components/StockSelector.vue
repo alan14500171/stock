@@ -111,10 +111,43 @@ const searchText = ref('')
 const showDropdown = ref(false)
 const input = ref(null)
 const currentIndex = ref(-1)
+const stockList = ref([])
+const refreshTimer = ref(null)
+
+// 获取股票列表
+const fetchStocks = async () => {
+  try {
+    const response = await axios.get('/api/stock/stocks', {
+      params: {
+        market: props.market,
+        per_page: 1000
+      }
+    })
+    if (response.data.success) {
+      stockList.value = response.data.data.items
+    }
+  } catch (error) {
+    console.error('获取股票列表失败:', error)
+  }
+}
+
+// 启动定时刷新
+const startRefreshTimer = () => {
+  stopRefreshTimer()
+  refreshTimer.value = setInterval(fetchStocks, 60000) // 每分钟刷新一次
+}
+
+// 停止定时刷新
+const stopRefreshTimer = () => {
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
 
 // 计算过滤后的股票列表
 const filteredStocks = computed(() => {
-  let result = props.stocks
+  let result = stockList.value
   if (props.market) {
     result = result.filter(stock => stock.market === props.market)
   }
@@ -297,11 +330,16 @@ watch(showDropdown, (newValue) => {
   }
 })
 
+// 在组件挂载时获取股票列表并启动定时刷新
 onMounted(() => {
+  fetchStocks()
+  startRefreshTimer()
   document.addEventListener('click', handleClickOutside)
 })
 
+// 在组件卸载时清理
 onBeforeUnmount(() => {
+  stopRefreshTimer()
   document.removeEventListener('click', handleClickOutside)
 })
 </script>
