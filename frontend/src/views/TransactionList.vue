@@ -102,7 +102,8 @@
               <th style="width: 120px" class="text-center">股票代码</th>
               <th style="width: 100px" class="text-center">交易编号</th>
               <th style="width: 50px" class="text-center">买卖</th>
-              <th style="width: 180px" class="text-center">成交明细</th>
+              <th style="width: 90px" class="text-center">成交明细</th>
+              <th style="width: 70px" class="text-end">平均价</th>
               <th style="width: 80px" class="text-end">总金额</th>
               <th style="width: 70px" class="text-end">经纪佣金</th>
               <th style="width: 70px" class="text-end">交易征费</th>
@@ -132,14 +133,15 @@
                 </td>
                 <td>
                   <template v-if="transaction.details && transaction.details.length">
-                    <div v-for="(detail, index) in transaction.details" :key="index">
-                      {{ formatNumber(detail.quantity, 0) }}股 @ {{ formatNumber(detail.price, 3) }}
+                    <div v-for="(detail, index) in transaction.details" :key="index" class="text-nowrap">
+                      {{ formatNumber(detail.quantity, 0) }}股@{{ formatNumber(detail.price, 3) }}
                     </div>
                   </template>
                   <template v-else>
-                    {{ formatNumber(transaction.total_quantity, 0) }}股 @ {{ formatNumber(transaction.total_amount / transaction.total_quantity, 3) }}
+                    {{ formatNumber(transaction.total_quantity, 0) }}股@{{ formatNumber(transaction.total_amount / transaction.total_quantity, 3) }}
                   </template>
                 </td>
+                <td class="text-end">{{ formatNumber(transaction.total_amount / transaction.total_quantity, 3) }}</td>
                 <td class="text-end">{{ formatNumber(transaction.total_amount) }}</td>
                 <td class="text-end">{{ formatNumber(transaction.broker_fee) }}</td>
                 <td class="text-end">{{ formatNumber(transaction.transaction_levy) }}</td>
@@ -949,6 +951,11 @@ td.text-center small {
 /* 调整成交明细的显示 */
 td > div {
   line-height: 1.2;
-  margin: 0.1rem 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.text-nowrap {
+  white-space: nowrap;
 }
 </style> 
