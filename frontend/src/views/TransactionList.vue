@@ -7,7 +7,8 @@
           <i class="fas fa-plus me-1"></i>添加记录
         </button>
         <button class="btn btn-outline-secondary btn-sm" @click="toggleSearch">
-          <i class="fas fa-search me-1"></i>搜索
+          <i :class="['fas', searchVisible ? 'fa-chevron-up' : 'fa-search']" class="me-1"></i>
+          {{ searchVisible ? '收起' : '搜索' }}
         </button>
       </div>
     </div>
@@ -224,12 +225,15 @@ import TransactionItem from '../components/TransactionItem.vue'
 const router = useRouter()
 const { message } = useMessage()
 const loading = ref(false)
-const searchVisible = ref(false)
+const showDialog = ref(false)
+const editData = ref(null)
 const transactions = ref([])
 const allStocks = ref([])
 const currentPage = ref(1)
-const totalPages = ref(0)
-const pageSize = 10
+const totalPages = ref(1)
+const totalItems = ref(0)
+const pageSize = 15
+const searchVisible = ref(true)
 
 // 搜索表单
 const searchForm = ref({
