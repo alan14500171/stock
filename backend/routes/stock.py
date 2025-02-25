@@ -290,6 +290,7 @@ def update_transaction(id):
     """更新交易记录"""
     try:
         data = request.get_json()
+        logger.info(f"更新交易记录: ID={id}, 数据={data}")
         
         # 验证交易数据
         errors = TransactionCalculator.validate_transaction(data)
@@ -313,16 +314,23 @@ def update_transaction(id):
                 'message': '交易记录不存在'
             }), 404
         
+        # 记录原始交易数据，用于比较变化
+        logger.info(f"原始交易记录: ID={transaction['id']}, 类型={transaction['transaction_type']}, 数量={transaction['total_quantity']}")
+        
         # 获取交易前的持仓状态
         prev_state = TransactionCalculator.get_previous_state(
             db, session['user_id'], data['stock_code'],
             data['market'], data['transaction_date'], id
         )
         
+        logger.info(f"交易前持仓状态: 数量={prev_state['quantity']}, 成本={prev_state['cost']}, 平均成本={prev_state['avg_cost']}")
+        
         # 计算交易变化
         try:
             changes = TransactionCalculator.calculate_position_change(data, prev_state)
+            logger.info(f"计算结果: 新持仓={changes['current_quantity']}, 新成本={changes['current_cost']}")
         except ValueError as e:
+            logger.error(f"计算交易变化失败: {str(e)}")
             return jsonify({
                 'success': False,
                 'message': str(e)

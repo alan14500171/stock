@@ -172,6 +172,18 @@ class TransactionCalculator:
     @staticmethod
     def update_subsequent_transactions(db, user_id, stock_code, market, transaction_date, transaction_id):
         """更新后续交易记录"""
+        # 获取当前编辑的交易记录
+        current_transaction_sql = """
+            SELECT current_quantity, current_cost, current_avg_cost
+            FROM stock.stock_transactions 
+            WHERE id = %s AND user_id = %s
+        """
+        current_trans = db.fetch_one(current_transaction_sql, [transaction_id, user_id])
+        
+        if not current_trans:
+            logger.error(f"找不到当前编辑的交易记录: ID={transaction_id}")
+            return False
+        
         # 获取后续交易记录
         sql = """
             SELECT id, transaction_type, total_quantity, total_amount,
@@ -195,49 +207,65 @@ class TransactionCalculator:
             return True
         
         try:
-            # 获取起始状态
-            current_state = TransactionCalculator.get_previous_state(
-                db, user_id, stock_code, market,
-                transaction_date, transaction_id
-            )
+            # 使用当前编辑交易后的状态作为起始状态
+            current_state = {
+                'quantity': Decimal(str(current_trans['current_quantity'])),
+                'cost': Decimal(str(current_trans['current_cost'])),
+                'avg_cost': Decimal(str(current_trans['current_avg_cost']))
+            }
+            
+            logger.info(f"开始更新后续交易记录，使用编辑后状态: 持仓数量={current_state['quantity']}, 成本={current_state['cost']}, 平均成本={current_state['avg_cost']}")
             
             # 逐个更新后续交易
             for trans in transactions:
+                logger.info(f"处理交易ID={trans['id']}, 类型={trans['transaction_type']}, 数量={trans['total_quantity']}, 当前持仓={current_state['quantity']}")
+                
+                # 对于卖出交易，检查持仓是否足够
+                if trans['transaction_type'].upper() == 'SELL' and Decimal(str(trans['total_quantity'])) > current_state['quantity']:
+                    logger.error(f"卖出数量({trans['total_quantity']})大于持仓数量({current_state['quantity']})")
+                    return False
+                
                 # 计算新状态
-                new_state = TransactionCalculator.calculate_position_change(trans, current_state)
-                
-                # 更新数据库
-                update_sql = """
-                    UPDATE stock.stock_transactions
-                    SET prev_quantity = %s,
-                        prev_cost = %s,
-                        prev_avg_cost = %s,
-                        current_quantity = %s,
-                        current_cost = %s,
-                        current_avg_cost = %s,
-                        realized_profit = %s,
-                        profit_rate = %s,
-                        updated_at = NOW()
-                    WHERE id = %s
-                """
-                db.execute(update_sql, [
-                    new_state['prev_quantity'],
-                    new_state['prev_cost'],
-                    new_state['prev_avg_cost'],
-                    new_state['current_quantity'],
-                    new_state['current_cost'],
-                    new_state['current_avg_cost'],
-                    new_state['realized_profit'],
-                    new_state['profit_rate'],
-                    trans['id']
-                ])
-                
-                # 更新当前状态用于下一次计算
-                current_state = {
-                    'quantity': new_state['current_quantity'],
-                    'cost': new_state['current_cost'],
-                    'avg_cost': new_state['current_avg_cost']
-                }
+                try:
+                    new_state = TransactionCalculator.calculate_position_change(trans, current_state)
+                    
+                    logger.info(f"交易ID={trans['id']}计算结果: 新持仓={new_state['current_quantity']}, 新成本={new_state['current_cost']}")
+                    
+                    # 更新数据库
+                    update_sql = """
+                        UPDATE stock.stock_transactions
+                        SET prev_quantity = %s,
+                            prev_cost = %s,
+                            prev_avg_cost = %s,
+                            current_quantity = %s,
+                            current_cost = %s,
+                            current_avg_cost = %s,
+                            realized_profit = %s,
+                            profit_rate = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                    """
+                    db.execute(update_sql, [
+                        new_state['prev_quantity'],
+                        new_state['prev_cost'],
+                        new_state['prev_avg_cost'],
+                        new_state['current_quantity'],
+                        new_state['current_cost'],
+                        new_state['current_avg_cost'],
+                        new_state['realized_profit'],
+                        new_state['profit_rate'],
+                        trans['id']
+                    ])
+                    
+                    # 更新当前状态用于下一次计算
+                    current_state = {
+                        'quantity': new_state['current_quantity'],
+                        'cost': new_state['current_cost'],
+                        'avg_cost': new_state['current_avg_cost']
+                    }
+                except ValueError as e:
+                    logger.error(f"计算交易ID={trans['id']}的状态变化失败: {str(e)}")
+                    return False
             
             return True
             

@@ -326,6 +326,12 @@ const submitForm = async () => {
       return sum + (quantity * price)
     }, 0)
     
+    console.log('提交交易数据:', {
+      总数量: totalQuantity,
+      总金额: totalAmount,
+      明细: form.value.details
+    })
+    
     const submitData = {
       transaction_date: form.value.transaction_date,
       stock_code: form.value.stock_code,
@@ -342,13 +348,7 @@ const submitForm = async () => {
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
       trading_fee: parseFloat(form.value.trading_fee) || 0,
       deposit_fee: parseFloat(form.value.deposit_fee) || 0,
-      market: form.value.market,
-      prev_quantity: form.value.prev_quantity,
-      prev_cost: form.value.prev_cost,
-      prev_avg_cost: form.value.prev_avg_cost,
-      current_quantity: form.value.current_quantity,
-      current_cost: form.value.current_cost,
-      current_avg_cost: form.value.current_avg_cost
+      market: form.value.market
     }
     
     const response = await axios.put(`/api/stock/transactions/${route.params.id}`, submitData)
@@ -361,6 +361,7 @@ const submitForm = async () => {
     }
   } catch (error) {
     showToast(error.response?.data?.message || error.message || '更新失败，请稍后重试', 'danger')
+    console.error('更新交易记录失败:', error.response?.data || error)
   } finally {
     submitting.value = false
   }
