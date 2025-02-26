@@ -516,8 +516,8 @@ const fetchStocks = async () => {
 }
 
 // 获取交易记录
-const fetchTransactions = async () => {
-  if (loading.value) return
+const fetchTransactions = async (forceRefresh = false) => {
+  if (loading.value && !forceRefresh) return
   
   loading.value = true
   try {
@@ -533,13 +533,15 @@ const fetchTransactions = async () => {
     }
     params.append('page', currentPage.value)
     params.append('per_page', pageSize)
-    params.append('_t', Date.now())
+    // 添加随机参数，确保不使用缓存
+    params.append('_t', Date.now() + Math.random())
     
     const response = await axios.get('/api/stock/transactions/', { 
       params,
       headers: {
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
+        'Expires': '0',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
@@ -557,7 +559,7 @@ const fetchTransactions = async () => {
       // 如果当前页大于总页数，跳转到最后一页
       if (currentPage.value > totalPages.value && totalPages.value > 0) {
         currentPage.value = totalPages.value
-        await fetchTransactions()
+        await fetchTransactions(true)
         return
       }
     }
@@ -609,7 +611,11 @@ const confirmDelete = async (transaction) => {
   
   try {
     loading.value = true
-    const response = await axios.delete(`/api/stock/transactions/${transaction.id}`, {
+    
+    // 记录要删除的ID，以防后续引用transaction对象出错
+    const transactionId = transaction.id
+    
+    const response = await axios.delete(`/api/stock/transactions/${transactionId}`, {
       headers: {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -617,40 +623,68 @@ const confirmDelete = async (transaction) => {
       withCredentials: true
     })
     
-    // 简化响应处理逻辑，只要请求成功就认为删除成功
-    message.success('交易记录删除成功')
-    
-    // 如果当前页只有一条记录，且不是第一页，则跳转到上一页
-    if (transactions.value.length === 1 && currentPage.value > 1) {
-      currentPage.value--
+    // 检查响应数据
+    if (response.data && response.data.success) {
+      // 删除成功
+      message.success(response.data?.message || '交易记录删除成功')
+      
+      // 强制延迟，确保后端处理完成
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // 如果当前页只有一条记录，且不是第一页，则跳转到上一页
+      if (transactions.value.length === 1 && currentPage.value > 1) {
+        currentPage.value--
+      }
+      
+      // 清空当前交易列表，强制刷新
+      transactions.value = []
+      
+      // 重新获取数据
+      await fetchTransactions(true)
+      
+      // 再次延迟后再次刷新，确保获取最新数据
+      setTimeout(() => {
+        fetchTransactions(true)
+      }, 1000)
+    } else {
+      // 服务器返回了响应，但操作失败
+      throw new Error(response.data?.message || '删除交易记录失败')
     }
     
-    // 重新获取数据
-    await fetchTransactions()
-    await fetchStocks()
   } catch (error) {
     console.error('删除交易记录失败:', error)
     
-    // 简化错误处理逻辑
-    if (error.response && error.response.status === 401) {
-      message.error('登录已过期，请重新登录')
-      router.push('/login')
-    } else if (error.response && error.response.status === 404) {
-      message.error('交易记录不存在或已被删除')
-      // 刷新列表以获取最新数据
-      await fetchTransactions()
-    } else {
-      // 使用安全的方式获取错误消息
-      const errorMessage = error.response && error.response.data && error.response.data.message
-        ? error.response.data.message
-        : (error.message || '删除失败，请稍后重试')
-      message.error(errorMessage)
+    // 简化错误处理，避免访问可能不存在的属性
+    let errorMessage = '删除失败，请稍后重试'
+    
+    // 安全地检查错误对象
+    if (error && error.response) {
+      const status = error.response.status
       
-      // 无论如何都刷新列表
-      await fetchTransactions()
+      if (status === 401) {
+        errorMessage = '登录已过期，请重新登录'
+        message.error(errorMessage)
+        router.push('/login')
+        return
+      } else if (status === 404) {
+        errorMessage = '交易记录不存在或已被删除'
+      } else if (error.response.data && typeof error.response.data.message === 'string') {
+        errorMessage = error.response.data.message
+      }
+    } else if (error && typeof error.message === 'string') {
+      errorMessage = error.message
     }
+    
+    message.error(errorMessage)
   } finally {
     loading.value = false
+    
+    // 无论成功或失败，最后都尝试刷新列表
+    try {
+      await fetchTransactions(true)
+    } catch (refreshError) {
+      console.error('刷新列表失败:', refreshError)
+    }
   }
 }
 
@@ -663,7 +697,7 @@ const editTransaction = async (transaction) => {
     }
     router.push(`/transactions/edit/${transaction.id}`)
   } catch (error) {
-    showToast(error.message || '编辑交易记录失败，请稍后重试', 'danger')
+    message.error(error.message || '编辑交易记录失败，请稍后重试')
   }
 }
 
