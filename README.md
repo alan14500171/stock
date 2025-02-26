@@ -138,3 +138,75 @@ npm run dev
 ## 许可证
 
 MIT License
+
+# GitHub自动更新容器
+
+这是一个用于在群辉NAS的Container Manager中部署的Docker容器，可以自动监控GitHub仓库的更新并同步到本地。
+
+## 功能特点
+
+- 定期检查GitHub仓库更新
+- 自动同步最新代码到本地
+- 支持Webhook通知
+- 支持自定义更新间隔
+- 支持自定义分支
+- 支持GitHub API令牌（提高API请求限制）
+- 支持更新后执行自定义脚本
+
+## 在群辉Container Manager中部署
+
+### 方法一：使用Docker Compose
+
+1. 在群辉中安装Docker和Container Manager
+2. 创建一个目录用于存放配置文件和数据
+3. 将本仓库中的文件上传到该目录
+4. 修改`docker-compose.yml`文件中的环境变量
+5. 在Container Manager中使用"添加 > 从docker-compose添加"功能
+
+### 方法二：直接使用镜像
+
+1. 在Container Manager中点击"添加"
+2. 搜索并选择`alpine:latest`镜像
+3. 设置容器名称为`github-updater`
+4. 在"高级设置"中：
+   - 添加环境变量
+   - 设置卷映射
+   - 设置自动重启策略
+5. 启动容器
+
+## 环境变量说明
+
+| 环境变量 | 说明 | 必填 | 默认值 |
+|---------|------|------|-------|
+| GITHUB_REPO | GitHub仓库（格式：用户名/仓库名） | 是 | 无 |
+| GITHUB_BRANCH | 要监控的分支 | 否 | main |
+| LOCAL_PATH | 容器内存储路径 | 否 | /data |
+| CHECK_INTERVAL | 检查间隔（秒） | 否 | 3600 |
+| GITHUB_TOKEN | GitHub API令牌 | 否 | 无 |
+| WEBHOOK_URL | 通知Webhook URL | 否 | 无 |
+| TZ | 时区 | 否 | Asia/Shanghai |
+
+## 卷映射
+
+- `/data`: 用于存储同步的仓库内容
+
+## 自定义更新后操作
+
+如果您需要在更新后执行特定操作（如重启服务），可以在仓库中添加`post-update.sh`脚本。该脚本将在每次更新后自动执行。
+
+## 日志查看
+
+可以通过Container Manager的日志查看功能查看容器日志，了解更新状态。
+
+## 故障排除
+
+1. 如果容器无法启动，请检查环境变量是否正确设置
+2. 如果无法连接GitHub，请检查网络连接
+3. 如果API请求频繁失败，考虑添加GitHub Token
+4. 如果需要访问私有仓库，必须提供有效的GitHub Token
+
+## 安全注意事项
+
+- 建议使用只读权限的GitHub Token
+- 不要将包含敏感信息的Token直接写入docker-compose.yml
+- 考虑使用群辉的环境变量功能存储敏感信息
