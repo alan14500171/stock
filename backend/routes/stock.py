@@ -153,16 +153,19 @@ def delete_transaction(id):
         if success:
             return jsonify({
                 'success': True,
-                'message': result['message']
+                'message': result.get('message', '删除交易记录成功')
             })
         else:
-            return jsonify({'success': False, **result}), status_code
+            return jsonify({
+                'success': False,
+                'message': result.get('message', '删除交易记录失败')
+            }), status_code
             
     except Exception as e:
         logger.error(f'删除交易记录失败: {str(e)}')
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': f'删除交易记录失败: {str(e)}'
         }), 500
 
 @stock_bp.route('/transactions/logs', methods=['GET'])

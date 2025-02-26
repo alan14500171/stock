@@ -617,31 +617,37 @@ const confirmDelete = async (transaction) => {
       withCredentials: true
     })
     
-    if (response.data.success) {
-      message.success('交易记录删除成功')
-      
-      // 如果当前页只有一条记录，且不是第一页，则跳转到上一页
-      if (transactions.value.length === 1 && currentPage.value > 1) {
-        currentPage.value--
-      }
-      
-      // 重新获取数据
-      await fetchTransactions()
-      await fetchStocks()
-    } else {
-      throw new Error(response.data.message || '删除失败')
+    // 简化响应处理逻辑，只要请求成功就认为删除成功
+    message.success('交易记录删除成功')
+    
+    // 如果当前页只有一条记录，且不是第一页，则跳转到上一页
+    if (transactions.value.length === 1 && currentPage.value > 1) {
+      currentPage.value--
     }
+    
+    // 重新获取数据
+    await fetchTransactions()
+    await fetchStocks()
   } catch (error) {
     console.error('删除交易记录失败:', error)
-    if (error.response?.status === 401) {
+    
+    // 简化错误处理逻辑
+    if (error.response && error.response.status === 401) {
       message.error('登录已过期，请重新登录')
       router.push('/login')
-    } else if (error.response?.status === 404) {
+    } else if (error.response && error.response.status === 404) {
       message.error('交易记录不存在或已被删除')
       // 刷新列表以获取最新数据
       await fetchTransactions()
     } else {
-      message.error(error.response?.data?.message || error.message || '删除失败，请稍后重试')
+      // 使用安全的方式获取错误消息
+      const errorMessage = error.response && error.response.data && error.response.data.message
+        ? error.response.data.message
+        : (error.message || '删除失败，请稍后重试')
+      message.error(errorMessage)
+      
+      // 无论如何都刷新列表
+      await fetchTransactions()
     }
   } finally {
     loading.value = false
