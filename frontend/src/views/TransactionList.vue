@@ -160,6 +160,12 @@
                     </small>
                   </template>
                 </td>
+                <td class="text-end">
+                  {{ formatNumber(transaction.prev_avg_cost, 3) }}
+                </td>
+                <td class="text-end">
+                  {{ formatNumber(transaction.current_avg_cost, 3) }}
+                </td>
                 <td>
                   <div class="d-flex justify-content-end gap-1">
                     <button 

@@ -22,23 +22,65 @@ def setup_logging():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-def get_all_transactions():
-    """获取所有交易记录"""
+def get_affected_transactions(user_id=None, stock_code=None, market=None, transaction_date=None):
+    """
+    获取受影响的交易记录
+    
+    Args:
+        user_id: 用户ID
+        stock_code: 股票代码
+        market: 市场
+        transaction_date: 交易日期
+        
+    Returns:
+        list: 交易记录列表
+    """
     sql = """
         SELECT id, current_quantity, current_cost
         FROM stock.stock_transactions
-        ORDER BY id
+        WHERE 1=1
     """
-    return db.fetch_all(sql)
+    params = []
+    
+    if user_id:
+        sql += " AND user_id = %s"
+        params.append(user_id)
+        
+    if stock_code:
+        sql += " AND stock_code = %s"
+        params.append(stock_code)
+        
+    if market:
+        sql += " AND market = %s"
+        params.append(market)
+        
+    if transaction_date:
+        sql += " AND transaction_date >= %s"
+        params.append(transaction_date)
+        
+    sql += " ORDER BY transaction_date, id"
+    
+    return db.fetch_all(sql, params)
 
-def update_running_fields():
-    """更新所有交易记录的running_quantity和running_cost字段"""
+def update_running_fields(user_id=None, stock_code=None, market=None, transaction_date=None):
+    """
+    更新交易记录的running_quantity和running_cost字段
+    
+    Args:
+        user_id: 用户ID，如果提供则只更新该用户的记录
+        stock_code: 股票代码，如果提供则只更新该股票的记录
+        market: 市场，如果提供则只更新该市场的记录
+        transaction_date: 交易日期，如果提供则只更新该日期及之后的记录
+        
+    Returns:
+        bool: 是否成功
+    """
     try:
-        # 获取所有交易记录
-        transactions = get_all_transactions()
+        # 获取需要更新的交易记录
+        transactions = get_affected_transactions(user_id, stock_code, market, transaction_date)
         
         if not transactions:
-            logger.info("没有找到交易记录")
+            logger.info("没有找到需要更新的交易记录")
             return True
         
         logger.info(f"共找到 {len(transactions)} 条交易记录需要更新")
@@ -96,7 +138,24 @@ def main():
     setup_logging()
     logger.info("开始更新交易记录的running_quantity和running_cost字段...")
     
-    if update_running_fields():
+    # 如果命令行参数提供了过滤条件，则使用过滤条件
+    user_id = None
+    stock_code = None
+    market = None
+    transaction_date = None
+    
+    if len(sys.argv) > 1:
+        for arg in sys.argv[1:]:
+            if arg.startswith('--user='):
+                user_id = arg.split('=')[1]
+            elif arg.startswith('--stock='):
+                stock_code = arg.split('=')[1]
+            elif arg.startswith('--market='):
+                market = arg.split('=')[1]
+            elif arg.startswith('--date='):
+                transaction_date = arg.split('=')[1]
+    
+    if update_running_fields(user_id, stock_code, market, transaction_date):
         logger.info("更新成功")
     else:
         logger.error("更新失败")

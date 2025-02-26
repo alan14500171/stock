@@ -9,6 +9,8 @@ import logging
 import json
 from sqlalchemy import text
 from services.transaction_calculator import TransactionCalculator
+from services.transaction_service import TransactionService
+from services.transaction_query import TransactionQuery
 
 stock_bp = Blueprint('stock', __name__)
 checker = CurrencyChecker()
@@ -29,136 +31,21 @@ def get_transactions():
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 10))
         
-        # 构建查询条件
-        conditions = ["t.user_id = %s"]
-        params = [user_id]
+        # 构建过滤条件
+        filters = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'market': market,
+            'stock_codes': stock_codes,
+            'transaction_code': transaction_code
+        }
         
-        if start_date:
-            conditions.append("t.transaction_date >= %s")
-            params.append(start_date)
-        if end_date:
-            conditions.append("t.transaction_date <= %s")
-            params.append(end_date)
-        if market:
-            conditions.append("t.market = %s")
-            params.append(market)
-        if stock_codes:
-            placeholders = ','.join(['%s'] * len(stock_codes))
-            conditions.append(f"t.stock_code IN ({placeholders})")
-            params.extend(stock_codes)
-        if transaction_code:
-            conditions.append("t.transaction_code LIKE %s")
-            params.append(f"%{transaction_code}%")
-            
-        where_clause = " AND ".join(conditions)
-        
-        # 计算总记录数
-        count_sql = f"""
-            SELECT COUNT(*) as total
-            FROM stock.stock_transactions t
-            WHERE {where_clause}
-        """
-        total = db.fetch_one(count_sql, params)
-        total_count = total['total']
-        total_pages = (total_count + per_page - 1) // per_page
-        
-        # 获取分页数据
-        offset = (page - 1) * per_page
-        
-        # 主查询SQL - 添加current_avg_cost和prev_avg_cost字段
-        main_sql = f"""
-            SELECT 
-                t.id,
-                t.transaction_date,
-                t.market,
-                t.stock_code,
-                s.code_name as stock_name,
-                t.transaction_code,
-                t.transaction_type as original_type,
-                LOWER(t.transaction_type) as transaction_type,
-                t.total_quantity,
-                t.total_amount,
-                t.broker_fee,
-                t.transaction_levy,
-                t.stamp_duty,
-                t.trading_fee,
-                t.deposit_fee,
-                (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                CASE 
-                    WHEN LOWER(t.transaction_type) = 'buy' THEN 
-                        t.total_amount + (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
-                    ELSE 
-                        t.total_amount - (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
-                END as net_amount,
-                t.prev_quantity,
-                t.prev_cost,
-                t.prev_avg_cost,
-                t.current_quantity,
-                t.current_cost,
-                t.current_avg_cost,
-                t.realized_profit,
-                t.profit_rate,
-                t.running_quantity,
-                t.running_cost
-            FROM stock.stock_transactions t
-            LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-            WHERE {where_clause}
-            ORDER BY t.transaction_date DESC, t.id DESC
-            LIMIT %s OFFSET %s
-        """
-        params.extend([per_page, offset])
-        transactions = db.fetch_all(main_sql, params)
-        
-        # 获取交易明细
-        if transactions:
-            transaction_ids = [t['id'] for t in transactions]
-            placeholders = ','.join(['%s'] * len(transaction_ids))
-            details_sql = f"""
-                SELECT transaction_id, quantity, price
-                FROM stock.stock_transaction_details
-                WHERE transaction_id IN ({placeholders})
-                ORDER BY id ASC
-            """
-            details = db.fetch_all(details_sql, transaction_ids)
-            
-            # 按交易ID分组明细
-            details_map = {}
-            for detail in details:
-                transaction_id = detail['transaction_id']
-                if transaction_id not in details_map:
-                    details_map[transaction_id] = []
-                details_map[transaction_id].append({
-                    'quantity': float(detail['quantity']),
-                    'price': float(detail['price']),
-                    'amount': float(detail['quantity']) * float(detail['price'])
-                })
-            
-            # 添加明细到交易记录
-            for transaction in transactions:
-                transaction_id = transaction['id']
-                transaction['details'] = details_map.get(transaction_id, [])
-                
-                # 转换数值字段为浮点数
-                numeric_fields = [
-                    'total_quantity', 'total_amount', 'broker_fee', 'transaction_levy',
-                    'stamp_duty', 'trading_fee', 'deposit_fee', 'total_fees', 'net_amount',
-                    'prev_quantity', 'prev_cost', 'prev_avg_cost',
-                    'current_quantity', 'current_cost', 'current_avg_cost',
-                    'realized_profit', 'profit_rate', 'running_quantity', 'running_cost'
-                ]
-                for field in numeric_fields:
-                    if field in transaction and transaction[field] is not None:
-                        transaction[field] = float(transaction[field])
+        # 使用TransactionQuery服务获取交易记录
+        result = TransactionQuery.get_transactions(user_id, filters, page, per_page)
         
         return jsonify({
             'success': True,
-            'data': {
-                'items': transactions,
-                'total': total_count,
-                'page': page,
-                'per_page': per_page,
-                'pages': total_pages
-            }
+            'data': result
         })
         
     except Exception as e:
@@ -176,142 +63,22 @@ def add_transaction():
         data = request.get_json()
         logger.info(f"接收到的交易数据: {data}")
         
-        # 验证交易数据
-        errors = TransactionCalculator.validate_transaction(data)
-        if errors:
-            logger.error(f"交易数据验证失败: {errors}")
-            return jsonify({
-                'success': False,
-                'message': '数据验证失败',
-                'errors': errors
-            }), 400
-        
-        # 获取交易前的持仓状态
-        prev_state = TransactionCalculator.get_previous_state(
-            db, session['user_id'], data['stock_code'],
-            data['market'], data['transaction_date']
+        # 使用交易服务处理添加操作
+        success, result, status_code = TransactionService.process_transaction(
+            db, session['user_id'], data
         )
         
-        # 计算交易变化
-        try:
-            changes = TransactionCalculator.calculate_position_change(data, prev_state)
-        except ValueError as e:
-            return jsonify({
-                'success': False,
-                'message': str(e)
-            }), 400
-        
-        # 开始事务
-        db.execute("START TRANSACTION")
-        
-        try:
-            # 插入交易记录
-            insert_sql = """
-                INSERT INTO stock.stock_transactions (
-                    user_id, transaction_date, stock_code, market,
-                    transaction_type, transaction_code, total_quantity,
-                    total_amount, broker_fee, transaction_levy,
-                    stamp_duty, trading_fee, deposit_fee, total_fees,
-                    net_amount, prev_quantity, prev_cost, prev_avg_cost,
-                    current_quantity, current_cost, current_avg_cost,
-                    realized_profit, profit_rate,
-                    created_at, updated_at
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, NOW(), NOW()
-                )
-            """
-            
-            params = [
-                session['user_id'],
-                data['transaction_date'],
-                data['stock_code'],
-                data['market'],
-                data['transaction_type'].lower(),
-                data.get('transaction_code', ''),
-                data['total_quantity'],
-                data['total_amount'],
-                data.get('broker_fee', 0),
-                data.get('transaction_levy', 0),
-                data.get('stamp_duty', 0),
-                data.get('trading_fee', 0),
-                data.get('deposit_fee', 0),
-                changes['total_fees'],
-                changes['net_amount'],
-                changes['prev_quantity'],
-                changes['prev_cost'],
-                changes['prev_avg_cost'],
-                changes['current_quantity'],
-                changes['current_cost'],
-                changes['current_avg_cost'],
-                changes['realized_profit'],
-                changes['profit_rate']
-            ]
-            
-            result = db.execute(insert_sql, params)
-            if not result:
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '添加交易记录失败'
-                }), 500
-            
-            # 获取新插入记录的ID
-            new_id = db.fetch_one("SELECT LAST_INSERT_ID() as id")['id']
-            
-            # 插入交易明细记录
-            if 'details' in data and data['details']:
-                for detail in data['details']:
-                    detail_sql = """
-                        INSERT INTO stock.stock_transaction_details
-                        (transaction_id, quantity, price, created_at)
-                        VALUES (%s, %s, %s, NOW())
-                    """
-                    detail_params = [new_id, detail['quantity'], detail['price']]
-                    detail_result = db.execute(detail_sql, detail_params)
-                    if not detail_result:
-                        db.execute("ROLLBACK")
-                        return jsonify({
-                            'success': False,
-                            'message': '添加交易明细失败'
-                        }), 500
-            
-            # 更新后续交易记录
-            if not TransactionCalculator.update_subsequent_transactions(
-                db, session['user_id'], data['stock_code'],
-                data['market'], data['transaction_date'], new_id
-            ):
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '更新后续交易记录失败'
-                }), 500
-            
-            # 提交事务
-            db.execute("COMMIT")
-            
-            # 更新running_quantity和running_cost字段
-            try:
-                # 导入更新脚本
-                from scripts.update_running_fields import update_running_fields
-                update_running_fields()
-                logger.info("成功更新running_quantity和running_cost字段")
-            except Exception as e:
-                logger.error(f"更新running_quantity和running_cost字段失败: {str(e)}")
-            
+        if success:
             return jsonify({
                 'success': True,
-                'message': '添加交易记录成功',
+                'message': result['message'],
                 'data': {
-                    'id': new_id,
-                    'changes': changes
+                    'id': result.get('id'),
+                    'changes': result.get('changes')
                 }
             })
-            
-        except Exception as e:
-            db.execute("ROLLBACK")
-            raise e
+        else:
+            return jsonify({'success': False, **result}), status_code
             
     except Exception as e:
         logger.error(f'添加交易记录失败: {str(e)}')
@@ -328,212 +95,32 @@ def update_transaction(id):
         data = request.get_json()
         logger.info(f"更新交易记录: ID={id}, 数据={data}")
         
-        # 验证交易数据
-        errors = TransactionCalculator.validate_transaction(data)
-        if errors:
-            return jsonify({
-                'success': False,
-                'message': '数据验证失败',
-                'errors': errors
-            }), 400
-        
-        # 获取原始交易记录
-        original_sql = """
-            SELECT * FROM stock.stock_transactions 
-            WHERE id = %s AND user_id = %s
-        """
-        transaction = db.fetch_one(original_sql, [id, session['user_id']])
-        
-        if not transaction:
-            return jsonify({
-                'success': False,
-                'message': '交易记录不存在'
-            }), 404
-        
-        # 记录原始交易数据，用于比较变化
-        logger.info(f"原始交易记录: ID={transaction['id']}, 类型={transaction['transaction_type']}, 数量={transaction['total_quantity']}")
-        
-        # 检查交易日期是否变更
-        date_changed = transaction['transaction_date'].strftime('%Y-%m-%d') != data['transaction_date']
-        
-        # 如果日期变更，需要验证新日期的合法性
-        if date_changed:
-            # 检查新日期是否会导致卖出时持仓不足
-            prev_state = TransactionCalculator.get_previous_state(
-                db, session['user_id'], data['stock_code'],
-                data['market'], data['transaction_date']
-            )
-            
-            if data['transaction_type'].lower() == 'sell':
-                total_quantity = float(data['total_quantity'])
-                prev_quantity = float(prev_state.get('quantity', 0))
-                
-                if prev_quantity < total_quantity:
-                    return jsonify({
-                        'success': False,
-                        'message': f'交易日期变更后，该日期的持仓数量（{prev_quantity}）不足以支持卖出数量（{total_quantity}）'
-                    }), 400
-        
-        # 获取交易前的持仓状态
-        prev_state = TransactionCalculator.get_previous_state(
-            db, session['user_id'], data['stock_code'],
-            data['market'], data['transaction_date'], id
+        # 检查编辑的合法性
+        is_valid, message, transaction = TransactionService.check_edit_validity(
+            db, session['user_id'], id, data
         )
         
-        # 计算交易变化
-        try:
-            changes = TransactionCalculator.calculate_position_change(data, prev_state)
-            logger.info(f"计算结果: 新持仓={changes['current_quantity']}, 新成本={changes['current_cost']}")
-        except ValueError as e:
-            logger.error(f"计算交易变化失败: {str(e)}")
+        if not is_valid:
             return jsonify({
                 'success': False,
-                'message': str(e)
+                'message': message
             }), 400
         
-        # 开始事务
-        db.execute("START TRANSACTION")
+        # 使用交易服务处理编辑操作
+        success, result, status_code = TransactionService.process_transaction(
+            db, session['user_id'], data, id
+        )
         
-        try:
-            # 先删除交易明细记录
-            delete_details_sql = "DELETE FROM stock.stock_transaction_details WHERE transaction_id = %s"
-            db.execute(delete_details_sql, [id])
-            
-            # 更新交易记录
-            update_sql = """
-                UPDATE stock.stock_transactions 
-                SET transaction_date = %s,
-                    stock_code = %s,
-                    market = %s,
-                    transaction_type = %s,
-                    transaction_code = %s,
-                    total_amount = %s,
-                    total_quantity = %s,
-                    broker_fee = %s,
-                    transaction_levy = %s,
-                    stamp_duty = %s,
-                    trading_fee = %s,
-                    deposit_fee = %s,
-                    total_fees = %s,
-                    net_amount = %s,
-                    prev_quantity = %s,
-                    prev_cost = %s,
-                    prev_avg_cost = %s,
-                    current_quantity = %s,
-                    current_cost = %s,
-                    current_avg_cost = %s,
-                    realized_profit = %s,
-                    profit_rate = %s,
-                    updated_at = NOW()
-                WHERE id = %s AND user_id = %s
-            """
-            
-            params = [
-                data['transaction_date'],
-                data['stock_code'],
-                data['market'],
-                data['transaction_type'].lower(),
-                data.get('transaction_code', ''),
-                data['total_amount'],
-                data['total_quantity'],
-                data.get('broker_fee', 0),
-                data.get('transaction_levy', 0),
-                data.get('stamp_duty', 0),
-                data.get('trading_fee', 0),
-                data.get('deposit_fee', 0),
-                changes['total_fees'],
-                changes['net_amount'],
-                changes['prev_quantity'],
-                changes['prev_cost'],
-                changes['prev_avg_cost'],
-                changes['current_quantity'],
-                changes['current_cost'],
-                changes['current_avg_cost'],
-                changes['realized_profit'],
-                changes['profit_rate'],
-                id,
-                session['user_id']
-            ]
-            
-            result = db.execute(update_sql, params)
-            if not result:
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '更新交易记录失败'
-                }), 500
-            
-            # 更新交易明细记录
-            # 先删除原有明细
-            delete_details_sql = "DELETE FROM stock.stock_transaction_details WHERE transaction_id = %s"
-            db.execute(delete_details_sql, [id])
-            
-            # 插入新的明细
-            if 'details' in data and data['details']:
-                for detail in data['details']:
-                    detail_sql = """
-                        INSERT INTO stock.stock_transaction_details
-                        (transaction_id, quantity, price, created_at)
-                        VALUES (%s, %s, %s, NOW())
-                    """
-                    detail_params = [id, detail['quantity'], detail['price']]
-                    detail_result = db.execute(detail_sql, detail_params)
-                    if not detail_result:
-                        db.execute("ROLLBACK")
-                        return jsonify({
-                            'success': False,
-                            'message': '更新交易明细失败'
-                        }), 500
-            
-            # 如果日期变更，需要更新原日期之后和新日期之后的所有交易记录
-            if date_changed:
-                # 更新原日期之后的交易记录
-                if not TransactionCalculator.update_subsequent_transactions(
-                    db, session['user_id'], transaction['stock_code'],
-                    transaction['market'], transaction['transaction_date'].strftime('%Y-%m-%d'),
-                    transaction['id']
-                ):
-                    db.execute("ROLLBACK")
-                    return jsonify({
-                        'success': False,
-                        'message': '更新原日期后的交易记录失败'
-                    }), 500
-            
-            # 更新新日期之后的交易记录
-            if not TransactionCalculator.update_subsequent_transactions(
-                db, session['user_id'], data['stock_code'],
-                data['market'], data['transaction_date'],
-                id
-            ):
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '更新后续交易记录失败'
-                }), 500
-            
-            # 提交事务
-            db.execute("COMMIT")
-            
-            # 更新running_quantity和running_cost字段
-            try:
-                # 导入更新脚本
-                from scripts.update_running_fields import update_running_fields
-                update_running_fields()
-                logger.info("成功更新running_quantity和running_cost字段")
-            except Exception as e:
-                logger.error(f"更新running_quantity和running_cost字段失败: {str(e)}")
-            
+        if success:
             return jsonify({
                 'success': True,
-                'message': '更新交易记录成功',
+                'message': result['message'],
                 'data': {
-                    'changes': changes
+                    'changes': result.get('changes')
                 }
             })
-            
-        except Exception as e:
-            db.execute("ROLLBACK")
-            raise e
+        else:
+            return jsonify({'success': False, **result}), status_code
             
     except Exception as e:
         logger.error(f'更新交易记录失败: {str(e)}')
@@ -547,145 +134,29 @@ def update_transaction(id):
 def delete_transaction(id):
     """删除交易记录"""
     try:
-        # 获取要删除的交易记录
-        transaction_sql = """
-            SELECT * FROM stock.stock_transactions 
-            WHERE id = %s AND user_id = %s
-        """
-        transaction = db.fetch_one(transaction_sql, [id, session['user_id']])
-        
-        if not transaction:
-            return jsonify({
-                'success': False,
-                'message': '交易记录不存在'
-            }), 404
-        
-        # 获取该交易之前的持仓状态
-        prev_state = TransactionCalculator.get_previous_state(
-            db, session['user_id'], transaction['stock_code'],
-            transaction['market'], transaction['transaction_date'], id
+        # 检查删除的合法性
+        is_valid, message, transaction = TransactionService.check_delete_validity(
+            db, session['user_id'], id
         )
         
-        # 获取后续第一条卖出交易记录
-        next_sell_sql = """
-            SELECT * FROM stock.stock_transactions 
-            WHERE user_id = %s 
-                AND stock_code = %s 
-                AND market = %s
-                AND transaction_type = 'sell'
-                AND (transaction_date > %s 
-                     OR (transaction_date = %s AND id > %s))
-            ORDER BY transaction_date ASC, id ASC
-            LIMIT 1
-        """
-        next_sell = db.fetch_one(next_sell_sql, [
-            session['user_id'],
-            transaction['stock_code'],
-            transaction['market'],
-            transaction['transaction_date'],
-            transaction['transaction_date'],
-            id
-        ])
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
         
-        # 如果删除的是买入交易，且后面有卖出交易，需要检查删除后的持仓是否足够支持后续卖出
-        if transaction['transaction_type'].lower() == 'buy' and next_sell:
-            # 计算删除后的持仓数量
-            prev_quantity = float(prev_state.get('quantity', 0))
-            current_quantity = prev_quantity
-            
-            # 获取要删除的交易到下一条卖出交易之间的所有买入交易
-            interim_buys_sql = """
-                SELECT COALESCE(SUM(total_quantity), 0) as total_buys
-                FROM stock.stock_transactions 
-                WHERE user_id = %s 
-                    AND stock_code = %s 
-                    AND market = %s
-                    AND transaction_type = 'buy'
-                    AND id != %s
-                    AND (
-                        (transaction_date > %s AND transaction_date < %s)
-                        OR (transaction_date = %s AND id > %s AND id < %s)
-                        OR (transaction_date = %s AND id < %s)
-                    )
-            """
-            interim_buys = db.fetch_one(interim_buys_sql, [
-                session['user_id'],
-                transaction['stock_code'],
-                transaction['market'],
-                id,
-                transaction['transaction_date'],
-                next_sell['transaction_date'],
-                transaction['transaction_date'],
-                id,
-                next_sell['id'],
-                next_sell['transaction_date'],
-                next_sell['id']
-            ])
-            
-            # 计算删除后的实际持仓
-            current_quantity = prev_quantity - float(transaction['total_quantity']) + float(interim_buys['total_buys'])
-            
-            # 检查持仓是否足够支持下一次卖出
-            if current_quantity < float(next_sell['total_quantity']):
-                return jsonify({
-                    'success': False,
-                    'message': f'删除此买入记录后，持仓数量（{current_quantity}）将不足以支持后续的卖出交易（{next_sell["total_quantity"]}）'
-                }), 400
+        # 使用交易服务处理删除操作
+        success, result, status_code = TransactionService.process_transaction(
+            db, session['user_id'], transaction, id, is_delete=True
+        )
         
-        # 开始事务
-        db.execute("START TRANSACTION")
-        
-        try:
-            # 先删除交易明细记录
-            delete_details_sql = "DELETE FROM stock.stock_transaction_details WHERE transaction_id = %s"
-            db.execute(delete_details_sql, [id])
-            
-            # 删除交易记录
-            delete_sql = """
-                DELETE FROM stock.stock_transactions 
-                WHERE id = %s AND user_id = %s
-            """
-            result = db.execute(delete_sql, [id, session['user_id']])
-            
-            if not result:
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '删除交易记录失败'
-                }), 500
-            
-            # 更新后续交易记录，使用前一条交易的状态作为起始状态
-            if not TransactionCalculator.update_subsequent_transactions(
-                db, session['user_id'], transaction['stock_code'],
-                transaction['market'], transaction['transaction_date'],
-                prev_state['id'] if prev_state else 0
-            ):
-                db.execute("ROLLBACK")
-                return jsonify({
-                    'success': False,
-                    'message': '更新后续交易记录失败'
-                }), 500
-            
-            # 提交事务
-            db.execute("COMMIT")
-            
-            # 更新running_quantity和running_cost字段
-            try:
-                # 导入更新脚本
-                from scripts.update_running_fields import update_running_fields
-                update_running_fields()
-                logger.info("成功更新running_quantity和running_cost字段")
-            except Exception as e:
-                logger.error(f"更新running_quantity和running_cost字段失败: {str(e)}")
-            
+        if success:
             return jsonify({
                 'success': True,
-                'message': '删除交易记录成功'
+                'message': result['message']
             })
-            
-        except Exception as e:
-            db.execute("ROLLBACK")
-            raise e
+        else:
+            return jsonify({'success': False, **result}), status_code
             
     except Exception as e:
         logger.error(f'删除交易记录失败: {str(e)}')
@@ -1360,45 +831,8 @@ def delete_exchange_rate(id):
 def get_transaction(id):
     """获取单个交易记录"""
     try:
-        # 主查询SQL - 添加current_avg_cost和prev_avg_cost字段
-        sql = """
-            SELECT 
-                t.id,
-                t.transaction_date,
-                t.market,
-                t.stock_code,
-                s.code_name as stock_name,
-                t.transaction_code,
-                t.transaction_type,
-                t.total_quantity,
-                t.total_amount,
-                t.broker_fee,
-                t.transaction_levy,
-                t.stamp_duty,
-                t.trading_fee,
-                t.deposit_fee,
-                (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee) as total_fees,
-                CASE 
-                    WHEN t.transaction_type = 'buy' THEN 
-                        t.total_amount + (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
-                    ELSE 
-                        t.total_amount - (t.broker_fee + t.transaction_levy + t.stamp_duty + t.trading_fee + t.deposit_fee)
-                END as net_amount,
-                t.prev_quantity,
-                t.prev_cost,
-                t.prev_avg_cost,
-                t.current_quantity,
-                t.current_cost,
-                t.current_avg_cost,
-                t.realized_profit,
-                t.profit_rate,
-                t.running_quantity,
-                t.running_cost
-            FROM stock.stock_transactions t
-            LEFT JOIN stock.stocks s ON t.stock_code = s.code AND t.market = s.market
-            WHERE t.id = %s AND t.user_id = %s
-        """
-        transaction = db.fetch_one(sql, [id, session['user_id']])
+        # 使用TransactionQuery服务获取交易记录
+        transaction = TransactionQuery.get_transaction_by_id(id, session['user_id'])
         
         if not transaction:
             return jsonify({
@@ -1406,57 +840,16 @@ def get_transaction(id):
                 'message': '交易记录不存在或无权限查看'
             }), 404
             
-        # 获取交易明细
-        details_sql = """
-            SELECT quantity, price
-            FROM stock.stock_transaction_details
-            WHERE transaction_id = %s
-            ORDER BY id ASC
-        """
-        details = db.fetch_all(details_sql, [id])
-        
-        # 转换数据类型
-        numeric_fields = [
-            'total_quantity', 'total_amount', 'broker_fee', 'transaction_levy',
-            'stamp_duty', 'trading_fee', 'deposit_fee', 'total_fees', 'net_amount',
-            'prev_quantity', 'prev_cost', 'prev_avg_cost',
-            'current_quantity', 'current_cost', 'current_avg_cost',
-            'realized_profit', 'profit_rate', 'running_quantity', 'running_cost'
-        ]
-        
-        for field in numeric_fields:
-            if field in transaction and transaction[field] is not None:
-                transaction[field] = float(transaction[field])
-        
-        # 转换交易类型为小写
-        transaction['transaction_type'] = transaction['transaction_type'].lower()
-        
-        # 格式化日期
-        if isinstance(transaction['transaction_date'], datetime):
-            transaction['transaction_date'] = transaction['transaction_date'].strftime('%Y-%m-%d')
-            
-        # 处理交易明细
-        transaction_details = []
-        for detail in details:
-            transaction_details.append({
-                'quantity': float(detail['quantity']),
-                'price': float(detail['price']),
-                'amount': float(detail['quantity']) * float(detail['price'])
-            })
-        
-        # 添加明细到交易记录
-        transaction['details'] = transaction_details
-        
         return jsonify({
             'success': True,
             'data': transaction
         })
         
     except Exception as e:
-        logger.error(f'获取交易记录详情失败: {str(e)}')
+        logger.error(f'获取交易记录失败: {str(e)}')
         return jsonify({
             'success': False,
-            'message': f'获取交易记录详情失败: {str(e)}'
+            'message': f'获取交易记录失败: {str(e)}'
         }), 500
 
 @stock_bp.route('/profit/')
@@ -1713,22 +1106,22 @@ def check_transaction_code():
                 'success': False,
                 'message': '请提供交易编号'
             }), 400
-
-        # 查询数据库中是否存在相同的交易编号
-        sql = """
-            SELECT COUNT(*) as count 
-            FROM stock_transactions 
-            WHERE user_id = %s AND transaction_code = %s
-        """
-        result = db.fetch_one(sql, [session['user_id'], code])
+            
+        # 使用TransactionQuery服务查询交易编号
+        sql = "SELECT COUNT(*) as count FROM stock.stock_transactions WHERE transaction_code = %s AND user_id = %s"
+        result = db.fetch_one(sql, [code, session['user_id']])
+        
+        exists = result and result['count'] > 0
         
         return jsonify({
             'success': True,
-            'exists': result['count'] > 0
+            'data': {
+                'exists': exists
+            }
         })
         
     except Exception as e:
-        logger.error(f"检查交易编号失败: {str(e)}")
+        logger.error(f'检查交易编号失败: {str(e)}')
         return jsonify({
             'success': False,
             'message': f'检查交易编号失败: {str(e)}'
