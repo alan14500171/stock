@@ -112,6 +112,8 @@
               <th style="width: 70px" class="text-end">存入证券费</th>
               <th style="width: 70px" class="text-end">手续费</th>
               <th style="width: 80px" class="text-end">净金额</th>
+              <th style="width: 80px" class="text-end">交易前均价</th>
+              <th style="width: 80px" class="text-end">交易后均价</th>
               <th style="width: 70px" class="text-center">操作</th>
             </tr>
           </thead>
@@ -127,8 +129,8 @@
                 </td>
                 <td>{{ transaction.transaction_code.trim() }}</td>
                 <td>
-                  <span :class="['badge', transaction.transaction_type === 'BUY' ? 'bg-danger' : 'bg-success']">
-                    {{ transaction.transaction_type === 'BUY' ? '买入' : '卖出' }}
+                  <span :class="['badge', transaction.transaction_type.toLowerCase() === 'buy' ? 'bg-danger' : 'bg-success']">
+                    {{ transaction.transaction_type.toLowerCase() === 'buy' ? '买入' : '卖出' }}
                   </span>
                 </td>
                 <td>
@@ -149,12 +151,12 @@
                 <td class="text-end">{{ formatNumber(transaction.trading_fee) }}</td>
                 <td class="text-end">{{ formatNumber(transaction.deposit_fee) }}</td>
                 <td class="text-end">{{ formatNumber(transaction.total_fees) }}</td>
-                <td class="text-end" :class="{'text-danger': transaction.transaction_type === 'BUY', 'text-success': transaction.transaction_type === 'SELL'}">
-                  {{ transaction.transaction_type === 'BUY' ? '-' : '' }}{{ formatNumber(transaction.net_amount) }}
+                <td class="text-end" :class="{'text-danger': transaction.transaction_type.toLowerCase() === 'buy', 'text-success': transaction.transaction_type.toLowerCase() === 'sell'}">
+                  {{ transaction.transaction_type.toLowerCase() === 'buy' ? '-' : '' }}{{ formatNumber(transaction.net_amount) }}
                   <template v-if="transaction.deposit_fee > 0">
                     <br>
-                    <small :class="{'text-danger': transaction.transaction_type === 'BUY', 'text-success': transaction.transaction_type === 'SELL'}">
-                      ({{ transaction.transaction_type === 'BUY' ? '-' : '' }}{{ formatNumber(transaction.net_amount - transaction.deposit_fee) }})
+                    <small :class="{'text-danger': transaction.transaction_type.toLowerCase() === 'buy', 'text-success': transaction.transaction_type.toLowerCase() === 'sell'}">
+                      ({{ transaction.transaction_type.toLowerCase() === 'buy' ? '-' : '' }}{{ formatNumber(transaction.net_amount - transaction.deposit_fee) }})
                     </small>
                   </template>
                 </td>
@@ -525,7 +527,6 @@ const fetchTransactions = async () => {
     }
     params.append('page', currentPage.value)
     params.append('per_page', pageSize)
-    // 添加时间戳参数避免缓存
     params.append('_t', Date.now())
     
     const response = await axios.get('/api/stock/transactions/', { 
@@ -540,7 +541,11 @@ const fetchTransactions = async () => {
     })
     
     if (response.data.success) {
-      transactions.value = response.data.data.items
+      console.log('Transaction data:', response.data.data.items)  // 添加日志
+      transactions.value = response.data.data.items.map(item => ({
+        ...item,
+        transaction_type: item.transaction_type.toLowerCase()  // 确保交易类型为小写
+      }))
       totalPages.value = response.data.data.pages
       
       // 如果当前页大于总页数，跳转到最后一页

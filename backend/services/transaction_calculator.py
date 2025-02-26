@@ -18,7 +18,7 @@ class TransactionCalculator:
     def calculate_net_amount(transaction, total_fees):
         """计算交易的净金额"""
         total_amount = Decimal(str(transaction['total_amount']))
-        if transaction['transaction_type'].upper() == 'BUY':
+        if transaction['transaction_type'].lower() == 'buy':
             return total_amount + total_fees
         else:
             return total_amount - total_fees
@@ -50,7 +50,7 @@ class TransactionCalculator:
         result['net_amount'] = TransactionCalculator.calculate_net_amount(transaction, total_fees)
         
         # 根据交易类型计算
-        if transaction['transaction_type'].upper() == 'BUY':
+        if transaction['transaction_type'].lower() == 'buy':
             # 买入
             result['current_quantity'] = prev_quantity + total_quantity
             result['current_cost'] = prev_cost + total_amount + total_fees
@@ -121,8 +121,8 @@ class TransactionCalculator:
         
         # 验证交易类型
         if transaction.get('transaction_type'):
-            if transaction['transaction_type'].upper() not in ['BUY', 'SELL']:
-                errors.append('交易类型必须为 BUY 或 SELL')
+            if transaction['transaction_type'].lower() not in ['buy', 'sell']:
+                errors.append('交易类型必须为 buy 或 sell')
         
         # 验证日期格式
         if transaction.get('transaction_date'):
@@ -224,7 +224,7 @@ class TransactionCalculator:
                 logger.info(f"处理交易ID={trans['id']}, 类型={trans['transaction_type']}, 数量={trans['total_quantity']}, 当前持仓={current_state['quantity']}")
                 
                 # 对于卖出交易，检查持仓是否足够
-                if trans['transaction_type'].upper() == 'SELL' and Decimal(str(trans['total_quantity'])) > current_state['quantity']:
+                if trans['transaction_type'].lower() == 'sell' and Decimal(str(trans['total_quantity'])) > current_state['quantity']:
                     logger.error(f"卖出数量({trans['total_quantity']})大于持仓数量({current_state['quantity']})")
                     return False
                 

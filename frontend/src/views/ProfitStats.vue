@@ -254,8 +254,8 @@
                                 <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
                                   <td class="transaction-info">
                                     {{ formatDate(detail.transaction_date) }}
-                                    <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
-                                      {{ detail.transaction_type === 'BUY' ? '买入' : '卖出' }}
+                                    <span :class="['transaction-type-badge', detail.transaction_type.toLowerCase() === 'buy' ? 'buy' : 'sell']">
+                                      {{ detail.transaction_type.toLowerCase() === 'buy' ? '买入' : '卖出' }}
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
                                   </td>
@@ -264,10 +264,10 @@
                                     {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
                                   </td>
                                   <td class="text-end amount">
-                                    {{ detail.transaction_type === 'BUY' ? formatNumber(detail.total_amount) : '' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end cost">
-                                    <template v-if="detail.transaction_type === 'BUY'">
+                                    <template v-if="detail.transaction_type.toLowerCase() === 'buy'">
                                       {{ formatNumber(detail.current_avg_cost, 3) }}
                                     </template>
                                     <template v-else>
@@ -275,16 +275,16 @@
                                     </template>
                                   </td>
                                   <td class="text-end amount">
-                                    {{ detail.transaction_type === 'SELL' ? formatNumber(detail.total_amount) : '' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end fees">
                                     {{ formatNumber(detail.total_fees) }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
-                                    {{ detail.transaction_type === 'SELL' ? formatNumber(calculateProfit(detail)) : '-' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(calculateProfit(detail)) : '-' }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfitRate(detail))">
-                                    {{ detail.transaction_type === 'SELL' ? formatRate(calculateProfitRate(detail)) : '-' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
                                   </td>
                                   <td class="text-end">-</td>
                                   <td class="text-end">-</td>
@@ -372,8 +372,8 @@
                                 <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
                                   <td class="transaction-info">
                                     {{ formatDate(detail.transaction_date) }}
-                                    <span :class="['transaction-type-badge', detail.transaction_type === 'BUY' ? 'buy' : 'sell']">
-                                      {{ detail.transaction_type === 'BUY' ? '买入' : '卖出' }}
+                                    <span :class="['transaction-type-badge', detail.transaction_type.toLowerCase() === 'buy' ? 'buy' : 'sell']">
+                                      {{ detail.transaction_type.toLowerCase() === 'buy' ? '买入' : '卖出' }}
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
                                   </td>
@@ -382,10 +382,10 @@
                                     {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
                                   </td>
                                   <td class="text-end amount">
-                                    {{ detail.transaction_type === 'BUY' ? formatNumber(detail.total_amount) : '' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end cost">
-                                    <template v-if="detail.transaction_type === 'BUY'">
+                                    <template v-if="detail.transaction_type.toLowerCase() === 'buy'">
                                       {{ formatNumber(detail.current_avg_cost, 3) }}
                                     </template>
                                     <template v-else>
@@ -393,16 +393,16 @@
                                     </template>
                                   </td>
                                   <td class="text-end amount">
-                                    {{ detail.transaction_type === 'SELL' ? formatNumber(detail.total_amount) : '' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(detail.total_amount) : '' }}
                                   </td>
                                   <td class="text-end fees">
                                     {{ formatNumber(detail.total_fees) }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
-                                    {{ detail.transaction_type === 'SELL' ? formatNumber(calculateProfit(detail)) : '-' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(calculateProfit(detail)) : '-' }}
                                   </td>
                                   <td class="text-end" :class="getProfitClass(calculateProfitRate(detail))">
-                                    {{ detail.transaction_type === 'SELL' ? formatRate(calculateProfitRate(detail)) : '-' }}
+                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
                                   </td>
                                   <td class="text-end">-</td>
                                   <td class="text-end">-</td>
@@ -1127,7 +1127,7 @@ const calculateHKDAmount = (detail) => {
 }
 
 const calculateProfit = (detail) => {
-  if (detail.transaction_type !== 'SELL') return 0
+  if (detail.transaction_type.toLowerCase() !== 'sell') return 0
   
   const sellAmount = Number(detail.total_amount)
   const costAmount = Number(detail.total_quantity) * Number(detail.prev_avg_cost)
@@ -1138,7 +1138,7 @@ const calculateProfit = (detail) => {
 
 // 在 script setup 部分添加计算盈亏率函数
 const calculateProfitRate = (detail) => {
-  if (detail.transaction_type !== 'SELL') return 0
+  if (detail.transaction_type.toLowerCase() !== 'sell') return 0
   
   const profit = calculateProfit(detail)
   const costAmount = Number(detail.total_quantity) * Number(detail.prev_avg_cost)

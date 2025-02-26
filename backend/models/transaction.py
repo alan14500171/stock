@@ -9,7 +9,7 @@ class StockTransaction:
         self.stock_code = data.get('stock_code')
         self.market = data.get('market')
         self.transaction_date = data.get('transaction_date')
-        self.transaction_type = data.get('transaction_type')
+        self.transaction_type = data.get('transaction_type', '').lower() if data else None
         self.transaction_code = data.get('transaction_code')
         self.total_amount = data.get('total_amount')
         self.total_quantity = data.get('total_quantity')
@@ -90,7 +90,7 @@ class StockTransaction:
             sql = """
                 UPDATE stock.stock_transactions 
                 SET user_id=%s, stock_code=%s, market=%s, transaction_date=%s,
-                    transaction_type=%s, transaction_code=%s, total_amount=%s,
+                    transaction_type=LOWER(%s), transaction_code=%s, total_amount=%s,
                     total_quantity=%s, broker_fee=%s, transaction_levy=%s,
                     stamp_duty=%s, trading_fee=%s, deposit_fee=%s,
                     exchange_rate=%s, updated_at=%s

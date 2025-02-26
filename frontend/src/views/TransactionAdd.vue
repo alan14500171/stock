@@ -655,8 +655,9 @@ const submitForm = async () => {
     const submitData = {
       transaction_date: form.value.transaction_date,
       stock_code: form.value.stock_code,
-      transaction_code: form.value.transaction_code,
+      market: form.value.market,
       transaction_type: form.value.transaction_type.toLowerCase(),
+      transaction_code: form.value.transaction_code,
       details: form.value.details.map(d => ({
         quantity: parseFloat(d.quantity) || 0,
         price: parseFloat(d.price) || 0
@@ -668,8 +669,10 @@ const submitForm = async () => {
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
       trading_fee: parseFloat(form.value.trading_fee) || 0,
       deposit_fee: parseFloat(form.value.deposit_fee) || 0,
-      market: form.value.market
     }
+    
+    console.log('提交的交易数据:', submitData)
+    console.log('表单原始数据:', form.value)
     
     const response = await axios.post('/api/stock/transactions', submitData)
 

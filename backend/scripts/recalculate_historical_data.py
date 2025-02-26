@@ -42,7 +42,7 @@ def calculate_transaction_fees(transaction):
 def calculate_net_amount(transaction, total_fees):
     """计算交易的净金额"""
     total_amount = Decimal(str(transaction['total_amount']))
-    if transaction['transaction_type'].upper() == 'BUY':
+    if transaction['transaction_type'].lower() == 'buy':
         return total_amount + total_fees
     else:
         return total_amount - total_fees

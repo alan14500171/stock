@@ -78,7 +78,7 @@ export const processTransactionDetails = (details) => {
  * @returns {number} 盈亏金额
  */
 export const calculateTransactionProfit = (detail) => {
-  if (detail.transaction_type !== 'SELL') return 0
+  if (detail.transaction_type !== 'sell') return 0
   const sellAmount = detail.total_amount
   const costAmount = detail.total_quantity * detail.sold_average_cost
   const fees = detail.total_fees_hkd
