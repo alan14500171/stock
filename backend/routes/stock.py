@@ -707,6 +707,29 @@ def get_exchange_rates():
             'message': f'获取汇率列表失败: {str(e)}'
         }), 500
 
+@stock_bp.route('/exchange_rates/fetch_missing', methods=['POST'])
+@login_required
+def fetch_missing_rates():
+    """获取缺失的汇率数据并更新临时汇率"""
+    try:
+        # 更新所有临时汇率记录
+        updated_count = checker.update_temporary_rates()
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功更新 {updated_count} 条临时汇率记录',
+            'data': {
+                'updated_count': updated_count
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取缺失汇率失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取缺失汇率失败: {str(e)}'
+        }), 500
+
 @stock_bp.route('/exchange_rates', methods=['POST'])
 @login_required
 def add_exchange_rate():
@@ -734,6 +757,9 @@ def add_exchange_rate():
         # 创建新记录
         rate = ExchangeRate(data)
         if rate.save():
+            # 添加成功后，检查并更新临时汇率记录
+            checker.update_temporary_rates()
+            
             return jsonify({
                 'success': True,
                 'message': '添加汇率记录成功',

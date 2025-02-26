@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import logging
 import json
 import re
+from config.database import db
+from models.exchange import ExchangeRate
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,52 @@ class CurrencyChecker:
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
     }
+
+    @staticmethod
+    def update_temporary_rates():
+        """
+        查询并更新所有标记为TEMPORARY的汇率记录
+        使用实时汇率API更新，并将数据来源修改为EXCHANGE_RATES_API
+        :return: 更新的记录数量
+        """
+        try:
+            # 查询所有TEMPORARY汇率记录
+            temp_rates = ExchangeRate.find_temporary_rates()
+            
+            if not temp_rates:
+                logger.info("没有找到临时汇率记录")
+                return 0
+                
+            updated_count = 0
+            
+            for rate in temp_rates:
+                try:
+                    currency = rate.currency
+                    rate_date = rate.rate_date
+                    
+                    # 获取最新汇率
+                    new_rate_value = CurrencyChecker.get_exchange_rate(currency)
+                    
+                    if new_rate_value:
+                        # 更新汇率记录
+                        rate.rate = new_rate_value
+                        rate.source = 'EXCHANGE_RATES_API'
+                        
+                        if rate.save():
+                            updated_count += 1
+                            logger.info(f"已更新汇率: {currency} @ {rate_date}, 新汇率: {new_rate_value}")
+                    else:
+                        logger.warning(f"无法获取汇率: {currency}")
+                        
+                except Exception as e:
+                    logger.error(f"更新汇率记录时出错: {str(e)}")
+                    continue
+                    
+            return updated_count
+            
+        except Exception as e:
+            logger.error(f"更新临时汇率记录失败: {str(e)}")
+            return 0
 
     @staticmethod
     def get_stock_price(query):

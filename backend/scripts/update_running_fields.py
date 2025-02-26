@@ -3,7 +3,6 @@
 
 import sys
 import os
-import logging
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -11,16 +10,6 @@ from decimal import Decimal, ROUND_HALF_UP
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.database import db
-import logging
-
-logger = logging.getLogger(__name__)
-
-def setup_logging():
-    """设置日志配置"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
 
 def get_affected_transactions(user_id=None, stock_code=None, market=None, transaction_date=None):
     """
@@ -80,10 +69,7 @@ def update_running_fields(user_id=None, stock_code=None, market=None, transactio
         transactions = get_affected_transactions(user_id, stock_code, market, transaction_date)
         
         if not transactions:
-            logger.info("没有找到需要更新的交易记录")
             return True
-        
-        logger.info(f"共找到 {len(transactions)} 条交易记录需要更新")
         
         # 开始事务
         db.execute("START TRANSACTION")
@@ -113,31 +99,23 @@ def update_running_fields(user_id=None, stock_code=None, market=None, transactio
                         success += 1
                     else:
                         failed += 1
-                        logger.error(f"更新交易记录ID={trans['id']}失败")
                         
-                except Exception as e:
+                except Exception:
                     failed += 1
-                    logger.error(f"更新交易记录ID={trans['id']}时发生错误: {str(e)}")
             
             # 提交事务
             db.execute("COMMIT")
-            logger.info(f"更新完成: 成功 {success} 条, 失败 {failed} 条")
             return True
             
-        except Exception as e:
+        except Exception:
             db.execute("ROLLBACK")
-            logger.error(f"更新交易记录失败: {str(e)}")
             return False
             
-    except Exception as e:
-        logger.error(f"获取交易记录失败: {str(e)}")
+    except Exception:
         return False
 
 def main():
     """主函数"""
-    setup_logging()
-    logger.info("开始更新交易记录的running_quantity和running_cost字段...")
-    
     # 如果命令行参数提供了过滤条件，则使用过滤条件
     user_id = None
     stock_code = None
@@ -155,10 +133,7 @@ def main():
             elif arg.startswith('--date='):
                 transaction_date = arg.split('=')[1]
     
-    if update_running_fields(user_id, stock_code, market, transaction_date):
-        logger.info("更新成功")
-    else:
-        logger.error("更新失败")
+    update_running_fields(user_id, stock_code, market, transaction_date)
 
 if __name__ == '__main__':
     main() 

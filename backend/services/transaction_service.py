@@ -1,9 +1,6 @@
 from datetime import datetime
-import logging
 from decimal import Decimal
 from .transaction_calculator import TransactionCalculator
-
-logger = logging.getLogger(__name__)
 
 class TransactionService:
     """交易服务类，处理交易记录的增加、编辑和删除操作"""
@@ -103,8 +100,8 @@ class TransactionService:
                             market=transaction_data['market'],
                             transaction_date=transaction_data['transaction_date']
                         )
-                except Exception as e:
-                    logger.error(f"更新running_quantity和running_cost字段失败: {str(e)}")
+                except Exception:
+                    pass
                 
                 return True, result, 200
                 
@@ -113,7 +110,6 @@ class TransactionService:
                 raise e
                 
         except Exception as e:
-            logger.error(f'处理交易记录失败: {str(e)}')
             return False, {'message': f'处理交易记录失败: {str(e)}'}, 500
     
     @staticmethod
@@ -137,24 +133,18 @@ class TransactionService:
                 connection.commit()
                 
                 # 更新后续交易记录
-                if not TransactionCalculator.update_subsequent_transactions(
+                TransactionCalculator.update_subsequent_transactions(
                     db, user_id, transaction_data['stock_code'],
                     transaction_data['market'], transaction_data['transaction_date'],
                     prev_state['id'] if prev_state and prev_state['id'] else 0
-                ):
-                    logger.warning("更新后续交易记录失败，但交易记录已成功删除")
-                    return True, {'message': '删除交易记录成功，但更新后续交易记录失败'}
+                )
                 
                 return True, {'message': '删除交易记录成功'}
                 
             except Exception as e:
                 # 回滚事务
                 connection.rollback()
-                logger.error(f"删除交易记录失败: {str(e)}")
                 return False, {'message': f'删除交易记录失败: {str(e)}'}
-            finally:
-                # 恢复自动提交
-                connection.autocommit = True
     
     @staticmethod
     def _handle_update(db, user_id, transaction_id, transaction_data, changes):
@@ -243,24 +233,18 @@ class TransactionService:
                 connection.commit()
                 
                 # 更新后续交易记录
-                if not TransactionCalculator.update_subsequent_transactions(
+                TransactionCalculator.update_subsequent_transactions(
                     db, user_id, transaction_data['stock_code'],
                     transaction_data['market'], transaction_data['transaction_date'],
                     transaction_id
-                ):
-                    logger.warning("更新后续交易记录失败，但主交易记录已成功更新")
-                    return True, {'message': '更新交易记录成功，但更新后续交易记录失败', 'changes': changes}
+                )
                 
                 return True, {'message': '更新交易记录成功', 'changes': changes}
                 
             except Exception as e:
                 # 回滚事务
                 connection.rollback()
-                logger.error(f"更新交易记录失败: {str(e)}")
                 return False, {'message': f'更新交易记录失败: {str(e)}'}
-            finally:
-                # 恢复自动提交
-                connection.autocommit = True
     
     @staticmethod
     def _handle_insert(db, user_id, transaction_data, changes):
@@ -322,7 +306,6 @@ class TransactionService:
                     
                     if not new_id:
                         connection.rollback()
-                        logger.error("插入交易记录失败，未获取到新记录ID")
                         return False, {'message': '添加交易记录失败'}
                     
                     # 处理交易明细
@@ -340,24 +323,18 @@ class TransactionService:
                 connection.commit()
                 
                 # 更新后续交易记录
-                if not TransactionCalculator.update_subsequent_transactions(
+                TransactionCalculator.update_subsequent_transactions(
                     db, user_id, transaction_data['stock_code'],
                     transaction_data['market'], transaction_data['transaction_date'],
                     new_id
-                ):
-                    logger.warning("更新后续交易记录失败，但主交易记录已成功添加")
-                    return True, {'message': '添加交易记录成功，但更新后续交易记录失败', 'id': new_id, 'changes': changes}
+                )
                 
                 return True, {'message': '添加交易记录成功', 'id': new_id, 'changes': changes}
                 
             except Exception as e:
                 # 回滚事务
                 connection.rollback()
-                logger.error(f"添加交易记录失败: {str(e)}")
                 return False, {'message': f'添加交易记录失败: {str(e)}'}
-            finally:
-                # 恢复自动提交
-                connection.autocommit = True
     
     @staticmethod
     def _handle_transaction_details(db, transaction_id, transaction_data):
@@ -389,7 +366,6 @@ class TransactionService:
                     except Exception as e:
                         # 回滚事务
                         connection.rollback()
-                        logger.error(f"处理交易明细失败: {str(e)}")
                         return False
                     finally:
                         # 恢复自动提交
@@ -397,7 +373,6 @@ class TransactionService:
             
             return True
         except Exception as e:
-            logger.error(f"处理交易明细失败: {str(e)}")
             return False
     
     @staticmethod

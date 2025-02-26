@@ -7,8 +7,8 @@
           <i :class="['fas', searchVisible ? 'fa-chevron-up' : 'fa-search']"></i>
           {{ searchVisible ? '收起' : '搜索' }}
         </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" @click="fetchMissingRates">
-          <i class="fas fa-sync-alt"></i> 获取缺失汇率
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="updateTemporaryRates">
+          <i class="fas fa-sync-alt"></i> 更新临时汇率
         </button>
         <button type="button" class="btn btn-sm btn-primary" @click="openAddModal">
           <i class="fas fa-plus"></i> 添加汇率
@@ -107,7 +107,7 @@ DD: 15"></i>
                 <td>{{ formatDate(rate.rate_date) }}</td>
                 <td>{{ rate.currency }}/HKD</td>
                 <td class="text-end">{{ formatNumber(rate.rate, 4) }}</td>
-                <td>{{ rate.source || '-' }}</td>
+                <td>{{ getSourceName(rate.source) }}</td>
                 <td>{{ formatDateTime(rate.created_at) }}</td>
                 <td>
                   <div class="d-flex gap-1">
@@ -201,7 +201,11 @@ DD: 15"></i>
               </div>
               <div class="mb-3">
                 <label class="form-label">数据来源</label>
-                <input type="text" class="form-control" v-model="form.source" />
+                <select class="form-select" v-model="form.source">
+                  <option value="MANUAL">手动修改</option>
+                  <option value="TEMPORARY">临时数据</option>
+                  <option value="EXCHANGE_RATES_API">自动更新</option>
+                </select>
               </div>
             </form>
           </div>
@@ -319,19 +323,22 @@ const fetchRates = async () => {
   }
 }
 
-// 获取缺失汇率
-const fetchMissingRates = async () => {
+// 更新临时汇率
+const updateTemporaryRates = async () => {
   if (loading.value) return
   
   loading.value = true
   try {
     const response = await axios.post('/api/stock/exchange_rates/fetch_missing')
     if (response.data.success) {
+      // 显示成功消息
+      alert(`成功更新 ${response.data.data.updated_count} 条临时汇率记录`)
       // 重新加载数据
       await fetchRates()
     }
   } catch (error) {
-    console.error('获取缺失汇率失败:', error)
+    console.error('更新临时汇率失败:', error)
+    alert('更新临时汇率失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -390,7 +397,7 @@ const resetForm = () => {
   form.rateDate = ''
   form.currency = ''
   form.rate = ''
-  form.source = ''
+  form.source = 'MANUAL'
   Object.keys(errors).forEach(key => errors[key] = '')
 }
 
@@ -417,23 +424,33 @@ const submitForm = async () => {
   
   submitting.value = true
   try {
-    const url = isEdit.value 
-      ? `/api/stock/exchange_rates/edit/${form.id}`
-      : '/api/stock/exchange_rates/add'
+    let response;
     
-    const response = await axios.post(url, {
-      rate_date: form.rateDate,
-      currency: form.currency,
-      rate: form.rate,
-      source: form.source
-    })
+    if (isEdit.value) {
+      // 编辑模式 - 使用PUT方法
+      response = await axios.put(`/api/stock/exchange_rates/${form.id}`, {
+        rate: form.rate,
+        source: form.source
+      });
+    } else {
+      // 添加模式
+      response = await axios.post('/api/stock/exchange_rates', {
+        rate_date: form.rateDate,
+        currency: form.currency,
+        rate: form.rate,
+        source: form.source
+      });
+    }
     
     if (response.data.success) {
       modal.hide()
       await fetchRates()
+    } else {
+      alert(response.data.message || '操作失败')
     }
   } catch (error) {
     console.error('保存汇率失败:', error)
+    alert(error.response?.data?.message || '保存失败，请稍后重试')
   } finally {
     submitting.value = false
   }
@@ -444,12 +461,15 @@ const confirmDelete = async (rate) => {
   if (!confirm('确定要删除这条汇率记录吗？')) return
   
   try {
-    const response = await axios.post(`/api/stock/exchange_rates/delete/${rate.id}`)
+    const response = await axios.delete(`/api/stock/exchange_rates/${rate.id}`)
     if (response.data.success) {
       await fetchRates()
+    } else {
+      alert(response.data.message || '删除失败')
     }
   } catch (error) {
     console.error('删除汇率失败:', error)
+    alert(error.response?.data?.message || '删除失败，请稍后重试')
   }
 }
 
@@ -479,6 +499,19 @@ const formatNumber = (value, decimals = 2) => {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   })
+}
+
+// 数据来源映射
+const getSourceName = (source) => {
+  if (!source) return '-'
+  
+  const sourceMap = {
+    'TEMPORARY': '临时数据',
+    'MANUAL': '手动修改',
+    'EXCHANGE_RATES_API': '自动更新'
+  }
+  
+  return sourceMap[source] || source
 }
 
 // 日期处理
@@ -719,7 +752,7 @@ const isValidDate = (date) => {
   return date instanceof Date && !isNaN(date)
 }
 
-// 初始化
+// 生命周期钩子
 onMounted(() => {
   initModal()
   fetchRates()

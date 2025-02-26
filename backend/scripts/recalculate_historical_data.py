@@ -3,7 +3,6 @@
 
 import sys
 import os
-import logging
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -11,16 +10,6 @@ from decimal import Decimal, ROUND_HALF_UP
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.database import db
-import logging
-
-logger = logging.getLogger(__name__)
-
-def setup_logging():
-    """设置日志配置"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
 
 def get_all_stock_positions():
     """获取所有不同的用户股票持仓"""
@@ -136,38 +125,26 @@ def recalculate_position(user_id, stock_code, market):
             db.execute("COMMIT")
             return True
             
-        except Exception as e:
+        except Exception:
             db.execute("ROLLBACK")
-            logger.error(f"重新计算持仓失败: {str(e)}")
             return False
             
-    except Exception as e:
-        logger.error(f"获取交易记录失败: {str(e)}")
+    except Exception:
         return False
 
 def main():
     """主函数"""
-    setup_logging()
-    logger.info("开始重新计算历史数据...")
-    
     # 获取所有不同的持仓
     positions = get_all_stock_positions()
-    total = len(positions)
     success = 0
     failed = 0
     
-    logger.info(f"共找到 {total} 个持仓需要重新计算")
-    
     # 逐个重新计算
-    for i, pos in enumerate(positions, 1):
-        logger.info(f"正在处理 [{i}/{total}] 用户 {pos['user_id']} 的 {pos['market']}{pos['stock_code']}")
-        
+    for pos in positions:
         if recalculate_position(pos['user_id'], pos['stock_code'], pos['market']):
             success += 1
         else:
             failed += 1
-    
-    logger.info(f"处理完成: 成功 {success} 个, 失败 {failed} 个")
 
 if __name__ == '__main__':
     main() 

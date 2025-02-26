@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'
-import TestDeleteTransaction from '../views/TestDeleteTransaction.vue'
 
 const routes = [
   {
@@ -91,15 +90,6 @@ const routes = [
     meta: {
       title: '股票管理',
       requiresAuth: true
-    }
-  },
-  {
-    path: '/test-delete',
-    name: 'TestDelete',
-    component: TestDeleteTransaction,
-    meta: {
-      requiresAuth: true,
-      title: '删除交易测试'
     }
   }
 ]

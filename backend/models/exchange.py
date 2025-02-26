@@ -24,6 +24,17 @@ class ExchangeRate:
             return cls(data) if data else None
         except:
             return None
+    
+    @classmethod
+    def find_temporary_rates(cls):
+        """查找所有临时汇率记录"""
+        try:
+            sql = "SELECT * FROM exchange_rates WHERE source = 'TEMPORARY'"
+            data = db.fetch_all(sql)
+            return [cls(rate) for rate in data] if data else []
+        except Exception as e:
+            print(f"查找临时汇率记录失败: {str(e)}")
+            return []
             
     def save(self):
         """保存或更新汇率记录"""
