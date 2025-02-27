@@ -1,431 +1,231 @@
 <template>
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h4 class="mb-0">盈利统计</h4>
-      <div class="btn-group">
-        <button type="button" class="btn btn-sm btn-outline-secondary" @click="toggleSearch">
-          <i :class="['bi', searchVisible ? 'bi-chevron-up' : 'bi-search']"></i>
-          {{ searchVisible ? '收起' : '搜索' }}
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary" @click="refreshMarketValue" :disabled="refreshLoading">
-          <i :class="['bi', refreshLoading ? 'bi-arrow-clockwise bi-spin' : 'bi-arrow-clockwise']"></i>
-          刷新市值
-        </button>
-        <button type="button" class="btn btn-sm btn-primary" @click="addTransaction">
-          <i class="bi bi-plus-lg"></i>
-          添加记录
-        </button>
+  <div class="container-fluid" v-permission="'profit:stats:view'">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">收益统计</h5>
+            <div class="btn-group" v-permission="'profit:stats:view'">
+              <button 
+                class="btn btn-sm" 
+                :class="timeRange === '1m' ? 'btn-primary' : 'btn-outline-primary'"
+                @click="changeTimeRange('1m')"
+              >
+                1个月
+              </button>
+              <button 
+                class="btn btn-sm" 
+                :class="timeRange === '3m' ? 'btn-primary' : 'btn-outline-primary'"
+                @click="changeTimeRange('3m')"
+              >
+                3个月
+              </button>
+              <button 
+                class="btn btn-sm" 
+                :class="timeRange === '6m' ? 'btn-primary' : 'btn-outline-primary'"
+                @click="changeTimeRange('6m')"
+              >
+                6个月
+              </button>
+              <button 
+                class="btn btn-sm" 
+                :class="timeRange === '1y' ? 'btn-primary' : 'btn-outline-primary'"
+                @click="changeTimeRange('1y')"
+              >
+                1年
+              </button>
+              <button 
+                class="btn btn-sm" 
+                :class="timeRange === 'all' ? 'btn-primary' : 'btn-outline-primary'"
+                @click="changeTimeRange('all')"
+              >
+                全部
+              </button>
+            </div>
+          </div>
+          <div class="card-body" v-permission="'profit:stats:view'">
+            <div class="chart-container" style="position: relative; height:400px;">
+              <canvas id="profitChart"></canvas>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- 搜索表单 -->
-    <div v-show="searchVisible" class="card-body border-bottom">
-      <form @submit.prevent="search" class="row g-2 align-items-end">
-        <div class="col-auto">
-          <label class="form-label small">开始日期</label>
-          <input
-            type="text"
-            class="form-control form-control-sm"
-            style="width: 130px;"
-            :value="startDateDisplayValue"
-            @input="handleStartDateInput"
-            @blur="handleStartDateBlur"
-            @keydown.enter.prevent="focusNext($event, 'endDate')"
-            @keydown.tab="focusNext($event, 'endDate')"
-            placeholder="YYYY-MM-DD"
-            ref="startDate"
-          />
+    
+    <div class="row mb-4" v-permission="'profit:stats:view'">
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">总收益</h5>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <h3 class="mb-0" :class="getProfitLossClass(totalProfit)">
+                  {{ formatCurrency(totalProfit) }}
+                </h3>
+                <small class="text-muted">已实现收益</small>
+              </div>
+              <div class="text-end">
+                <div :class="['fs-5', getProfitLossClass(totalProfitPercent)]">
+                  {{ formatPercent(totalProfitPercent) }}
+                </div>
+                <small class="text-muted">收益率</small>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="col-auto">
-          <label class="form-label small">结束日期</label>
-          <input
-            type="text"
-            class="form-control form-control-sm"
-            style="width: 130px;"
-            :value="endDateDisplayValue"
-            @input="handleEndDateInput"
-            @blur="handleEndDateBlur"
-            @keydown.enter.prevent="focusNext($event, 'market')"
-            @keydown.tab="focusNext($event, 'market')"
-            placeholder="YYYY-MM-DD"
-            ref="endDate"
-          />
+      </div>
+      
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">年化收益</h5>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <h3 class="mb-0" :class="getProfitLossClass(annualizedReturn)">
+                  {{ formatPercent(annualizedReturn) }}
+                </h3>
+                <small class="text-muted">年化收益率</small>
+              </div>
+              <div class="text-end">
+                <div class="fs-5">{{ formatNumber(tradingDays) }}</div>
+                <small class="text-muted">交易天数</small>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="col-auto">
-          <label class="form-label small">市场</label>
-          <select 
-            class="form-select form-select-sm"
-            style="width: 100px;"
-            v-model="searchForm.market"
-            ref="market"
-            @keydown.enter.prevent="focusNext($event, 'search')"
-            @keydown.tab="focusNext($event, 'search')"
-          >
-            <option value="">全部</option>
-            <option value="HK">HK</option>
-            <option value="USA">USA</option>
-          </select>
+      </div>
+      
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">交易统计</h5>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <h3 class="mb-0">{{ totalTransactions }}</h3>
+                <small class="text-muted">交易次数</small>
+              </div>
+              <div class="text-end">
+                <div class="fs-5">{{ winRate }}%</div>
+                <small class="text-muted">胜率</small>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="col-auto" style="min-width: 200px; max-width: 300px;">
-          <label class="form-label small">股票代码</label>
-          <stock-selector
-            v-model="searchForm.stockCodes"
-            :stocks="allStocks"
-            :market="searchForm.market"
-            class="stock-selector-sm"
-          />
+      </div>
+      
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">盈亏比</h5>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <h3 class="mb-0 text-success">{{ formatCurrency(avgProfit) }}</h3>
+                <small class="text-muted">平均盈利</small>
+              </div>
+              <div class="text-end">
+                <h3 class="mb-0 text-danger">{{ formatCurrency(avgLoss) }}</h3>
+                <small class="text-muted">平均亏损</small>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="col-auto flex-grow-1" style="max-width: 50px;"></div>
-        <div class="col-auto d-flex align-items-end" style="min-width: 80px;">
-          <button type="submit" class="btn btn-sm btn-primary w-100 border border-primary text-white" style="background-color: #0D6EFD;" :disabled="loading" ref="searchBtn">
-            <i class="bi bi-search me-1"></i>查询
-          </button>
-        </div>
-        <div class="col-auto d-flex align-items-end" style="min-width: 80px;">
-          <button type="button" class="btn btn-sm btn-outline-secondary w-100" @click="resetSearch">
-            <i class="bi bi-arrow-clockwise me-1"></i>重置
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
-
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
-          <thead class="table-light">
-            <tr>
-              <th></th>
-              <th>市场</th>
-              <th class="text-end">股票数量</th>
-              <th class="text-end">笔数</th>
-              <th class="text-end">买入总额</th>
-              <th class="text-end" title="移动加权平均价">平均价格</th>
-              <th class="text-end">卖出总额</th>
-              <th class="text-end">费用</th>
-              <th class="text-end">已实现盈亏</th>
-              <th class="text-end">现价</th>
-              <th class="text-end">持仓盈亏</th>
-              <th class="text-end">总盈亏</th>
-              <th class="text-end">盈亏率</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="market in getMarkets" :key="market">
-              <!-- 市场汇总 -->
-              <tr class="market-row">
-                <td>
-                  <button @click="toggleMarket(market)" class="btn btn-sm btn-outline-primary">
-                    <i :class="['bi bi-chevron-right', { 'rotate-90': isMarketExpanded(market) }]"></i>
-                  </button>
-                </td>
-                <td>{{ market }}</td>
-                <td class="text-end">{{ formatNumber(marketStats[market].total_stocks, 0) }}</td>
-                <td class="text-end">{{ marketStats[market].transaction_count }}</td>
-                <td class="text-end text-danger">{{ formatNumber(marketStats[market].total_buy) }}</td>
-                <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(marketStats[market].total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(marketStats[market].total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].realized_profit)">
-                  {{ formatNumber(marketStats[market].realized_profit) }}
-                </td>
-                <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].holding_profit)">
-                  {{ formatNumber(marketStats[market].holding_profit) }}
-                </td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].total_profit)">
-                  {{ formatNumber(marketStats[market].total_profit) }}
-                </td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].profit_rate)">
-                  {{ formatRate(marketStats[market].profit_rate) }}
-                </td>
-              </tr>
-
-              <!-- 持仓统计 -->
-              <tr v-if="isMarketExpanded(market)" class="holding-stats-row">
-                <td></td>
-                <td><strong>持仓统计</strong></td>
-                <td class="text-end">{{ marketStats[market].holding_stats.count }}</td>
-                <td class="text-end">-</td>
-                <td class="text-end text-danger">{{ formatNumber(marketStats[market].holding_stats.total_buy) }}</td>
-                <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(marketStats[market].holding_stats.total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(marketStats[market].holding_stats.total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.realized_profit)">
-                  {{ formatNumber(marketStats[market].holding_stats.realized_profit) }}
-                </td>
-                <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.holding_profit)">
-                  {{ formatNumber(marketStats[market].holding_stats.holding_profit) }}
-                </td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.total_profit)">
-                  {{ formatNumber(marketStats[market].holding_stats.total_profit) }}
-                </td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].holding_stats.profit_rate)">
-                  {{ formatRate(marketStats[market].holding_stats.profit_rate) }}
-                </td>
-              </tr>
-
-              <!-- 已清仓统计 -->
-              <tr v-if="isMarketExpanded(market)" class="closed-stats-row">
-                <td></td>
-                <td><strong>已清仓统计</strong></td>
-                <td class="text-end">{{ marketStats[market].closed_stats.count }}</td>
-                <td class="text-end">-</td>
-                <td class="text-end text-danger">{{ formatNumber(marketStats[market].closed_stats.total_buy) }}</td>
-                <td class="text-end">-</td>
-                <td class="text-end text-success">{{ formatNumber(marketStats[market].closed_stats.total_sell) }}</td>
-                <td class="text-end">{{ formatNumber(marketStats[market].closed_stats.total_fees) }}</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].closed_stats.realized_profit)">
-                  {{ formatNumber(marketStats[market].closed_stats.realized_profit) }}
-                </td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
-                <td class="text-end" :class="getProfitClass(marketStats[market].closed_stats.profit_rate)">
-                  {{ formatRate(marketStats[market].closed_stats.profit_rate) }}
-                </td>
-              </tr>
-
-              <!-- 持仓股票 -->
-              <template v-if="isMarketExpanded(market)">
-                <tr class="holding-group-row">
-                  <td>
-                    <button @click="toggleHoldingGroup(market)" class="btn btn-sm btn-outline-secondary">
-                      <i :class="['bi bi-chevron-right', { 'rotate-90': isHoldingGroupExpanded(market) }]"></i>
-                    </button>
-                  </td>
-                  <td colspan="12"><strong>持仓股票</strong></td>
-                </tr>
-
-                <template v-if="isHoldingGroupExpanded(market)">
-                  <template v-for="stock in getHoldingStocks(market)" :key="stock.code">
-                    <tr class="stock-row">
-                      <td>
-                        <button @click="toggleStock(market, stock.code)" class="btn btn-sm btn-outline-secondary">
-                          <i :class="['bi bi-chevron-right', { 'rotate-90': isStockExpanded(market, stock.code) }]"></i>
-                        </button>
-                      </td>
-                      <td>
-                        {{ stock.code }}
-                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
-                      </td>
-                      <td class="text-end">{{ formatNumber(stock.current_quantity, 0) }}</td>
-                      <td class="text-end">{{ stock.transaction_count }}</td>
-                      <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
-                      <td class="text-end">{{ formatNumber(stock.average_cost, 3) }}</td>
-                      <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
-                      <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
-                      <td class="text-end" :class="getProfitClass(stock.realized_profit)">
-                        {{ formatNumber(stock.realized_profit) }}
-                      </td>
-                      <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
-                      <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                        {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
-                      </td>
-                      <td class="text-end" :class="getProfitClass(stock.total_profit)">
-                        {{ formatNumber(stock.total_profit) }}
-                      </td>
-                      <td class="text-end" :class="getProfitClass(stock.profit_rate)">
-                        {{ formatRate(stock.profit_rate) }}
-                      </td>
-                    </tr>
-                    <!-- 交易明细行 -->
-                    <tr v-if="isStockExpanded(market, stock.code)">
-                      <td colspan="13" class="p-0">
-                        <div class="transaction-details">
-                          <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                              <tr>
-                                <th class="transaction-info">交易日期</th>
-                                <th class="quantity-price">数量@单价</th>
-                                <th class="text-end amount">买入金额</th>
-                                <th class="text-end cost" title="移动加权平均价">平均价格</th>
-                                <th class="text-end amount">卖出金额</th>
-                                <th class="text-end fees">费用</th>
-                                <th class="text-end profit">盈亏</th>
-                                <th class="text-end current-price">盈亏率</th>
-                                <th class="text-end holding-value"></th>
-                                <th class="text-end total-profit"></th>
-                                <th class="text-end profit-rate"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <template v-if="transactionDetails[`${market}-${stock.code}`]">
-                                <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
-                                  <td class="transaction-info">
-                                    {{ formatDate(detail.transaction_date) }}
-                                    <span :class="['transaction-type-badge', detail.transaction_type.toLowerCase() === 'buy' ? 'buy' : 'sell']">
-                                      {{ detail.transaction_type.toLowerCase() === 'buy' ? '买入' : '卖出' }}
-                                    </span>
-                                    <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
-                                  </td>
-                                  <td class="quantity-price">
-                                    {{ formatNumber(detail.total_quantity, 0) }} @ 
-                                    {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
-                                  </td>
-                                  <td class="text-end amount">
-                                    {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
-                                  </td>
-                                  <td class="text-end cost">
-                                    <template v-if="detail.transaction_type.toLowerCase() === 'buy'">
-                                      {{ formatNumber(detail.current_avg_cost, 3) }}
-                                    </template>
-                                    <template v-else>
-                                      {{ formatNumber(detail.prev_avg_cost, 3) }}
-                                    </template>
-                                  </td>
-                                  <td class="text-end amount">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(detail.total_amount) : '' }}
-                                  </td>
-                                  <td class="text-end fees">
-                                    {{ formatNumber(detail.total_fees) }}
-                                  </td>
-                                  <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(calculateProfit(detail)) : '-' }}
-                                  </td>
-                                  <td class="text-end" :class="getProfitClass(calculateProfitRate(detail))">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
-                                  </td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                </tr>
-                              </template>
-                              <tr v-else>
-                                <td colspan="11" class="text-center py-2">
-                                  <small class="text-muted">暂无交易明细数据</small>
-                    </td>
-                              </tr>
-                            </tbody>
-                          </table>
+    
+    <div class="row" v-permission="'profit:stats:view'">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">交易记录</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>股票</th>
+                    <th>买入日期</th>
+                    <th>卖出日期</th>
+                    <th>持有天数</th>
+                    <th>买入价</th>
+                    <th>卖出价</th>
+                    <th>数量</th>
+                    <th>收益</th>
+                    <th>收益率</th>
+                    <th>年化收益</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="trade in trades" :key="trade.id">
+                    <td>
+                      <div class="d-flex align-items-center">
+                        <span class="badge me-2" :class="trade.market === 'HK' ? 'bg-danger' : 'bg-primary'">
+                          {{ trade.market }}
+                        </span>
+                        <div>
+                          <div class="fw-bold">{{ trade.stock_code }}</div>
+                          <small class="text-muted">{{ trade.stock_name }}</small>
                         </div>
+                      </div>
+                    </td>
+                    <td>{{ formatDate(trade.buy_date) }}</td>
+                    <td>{{ formatDate(trade.sell_date) }}</td>
+                    <td>{{ trade.holding_days }}</td>
+                    <td>{{ formatPrice(trade.buy_price, trade.market) }}</td>
+                    <td>{{ formatPrice(trade.sell_price, trade.market) }}</td>
+                    <td>{{ formatNumber(trade.quantity) }}</td>
+                    <td :class="getProfitLossClass(trade.profit)">
+                      {{ formatCurrency(trade.profit) }}
+                    </td>
+                    <td :class="getProfitLossClass(trade.profit_percent)">
+                      {{ formatPercent(trade.profit_percent) }}
+                    </td>
+                    <td :class="getProfitLossClass(trade.annualized_return)">
+                      {{ formatPercent(trade.annualized_return) }}
                     </td>
                   </tr>
-                  </template>
-                </template>
-
-                <!-- 已清仓股票 -->
-                <tr class="closed-group-row">
-                  <td>
-                    <button @click="toggleClosedGroup(market)" class="btn btn-sm btn-outline-secondary">
-                      <i :class="['bi bi-chevron-right', { 'rotate-90': isClosedGroupExpanded(market) }]"></i>
-                    </button>
-                  </td>
-                  <td colspan="12"><strong>已清仓股票</strong></td>
-                </tr>
-
-                <template v-if="isClosedGroupExpanded(market)">
-                  <template v-for="stock in getClosedStocks(market)" :key="stock.code">
-                    <tr class="stock-row">
-                      <td>
-                        <button @click="toggleStock(market, stock.code)" class="btn btn-sm btn-outline-secondary">
-                          <i :class="['bi bi-chevron-right', { 'rotate-90': isStockExpanded(market, stock.code) }]"></i>
-                        </button>
-                      </td>
-                      <td>
-                        {{ stock.code }}
-                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
-                      </td>
-                      <td class="text-end">{{ stock.quantity || '-' }}</td>
-                      <td class="text-end">{{ stock.transaction_count }}</td>
-                      <td class="text-end text-danger">{{ formatNumber(stock.total_buy) }}</td>
-                      <td class="text-end">-</td>
-                      <td class="text-end text-success">{{ formatNumber(stock.total_sell) }}</td>
-                      <td class="text-end">{{ formatNumber(stock.total_fees) }}</td>
-                      <td class="text-end" :class="getProfitClass(stock.realized_profit)">
-                        {{ formatNumber(stock.realized_profit) }}
-                      </td>
-                      <td class="text-end">{{ stock.current_quantity > 0 ? formatNumber(stock.current_price, 3) : '-' }}</td>
-                      <td class="text-end" :class="getProfitClass(stock.holding_profit)">
-                        {{ stock.current_quantity > 0 ? formatNumber(stock.holding_profit) : '-' }}
-                      </td>
-                      <td class="text-end" :class="getProfitClass(stock.total_profit)">
-                        {{ formatNumber(stock.total_profit) }}
-                      </td>
-                      <td class="text-end" :class="getProfitClass(stock.profit_rate)">
-                        {{ formatRate(stock.profit_rate) }}
-                      </td>
-                    </tr>
-                    <!-- 交易明细行 -->
-                    <tr v-if="isStockExpanded(market, stock.code)">
-                      <td colspan="13" class="p-0">
-                        <div class="transaction-details">
-                          <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                              <tr>
-                                <th class="transaction-info">交易日期</th>
-                                <th class="quantity-price">数量@单价</th>
-                                <th class="text-end amount">买入金额</th>
-                                <th class="text-end cost" title="移动加权平均价">平均价格</th>
-                                <th class="text-end amount">卖出金额</th>
-                                <th class="text-end fees">费用</th>
-                                <th class="text-end profit">盈亏</th>
-                                <th class="text-end current-price">盈亏率</th>
-                                <th class="text-end holding-value"></th>
-                                <th class="text-end total-profit"></th>
-                                <th class="text-end profit-rate"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <template v-if="transactionDetails[`${market}-${stock.code}`]">
-                                <tr v-for="detail in sortTransactionDetails(transactionDetails[`${market}-${stock.code}`])" :key="detail.id">
-                                  <td class="transaction-info">
-                                    {{ formatDate(detail.transaction_date) }}
-                                    <span :class="['transaction-type-badge', detail.transaction_type.toLowerCase() === 'buy' ? 'buy' : 'sell']">
-                                      {{ detail.transaction_type.toLowerCase() === 'buy' ? '买入' : '卖出' }}
-                                    </span>
-                                    <span class="transaction-code">{{ detail.transaction_code.trim() }}</span>
-                                  </td>
-                                  <td class="quantity-price">
-                                    {{ formatNumber(detail.total_quantity, 0) }} @ 
-                                    {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
-                                  </td>
-                                  <td class="text-end amount">
-                                    {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
-                                  </td>
-                                  <td class="text-end cost">
-                                    <template v-if="detail.transaction_type.toLowerCase() === 'buy'">
-                                      {{ formatNumber(detail.current_avg_cost, 3) }}
-                                    </template>
-                                    <template v-else>
-                                      {{ formatNumber(detail.prev_avg_cost, 3) }}
-                                    </template>
-                                  </td>
-                                  <td class="text-end amount">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(detail.total_amount) : '' }}
-                                  </td>
-                                  <td class="text-end fees">
-                                    {{ formatNumber(detail.total_fees) }}
-                                  </td>
-                                  <td class="text-end" :class="getProfitClass(calculateProfit(detail))">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatNumber(calculateProfit(detail)) : '-' }}
-                                  </td>
-                                  <td class="text-end" :class="getProfitClass(calculateProfitRate(detail))">
-                                    {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
-                                  </td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
-                                </tr>
-                              </template>
-                              <tr v-else>
-                                <td colspan="11" class="text-center py-2">
-                                  <small class="text-muted">暂无交易明细数据</small>
-                    </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                  <tr v-if="trades.length === 0">
+                    <td colspan="10" class="text-center py-3">
+                      <div class="text-muted">暂无交易记录</div>
                     </td>
                   </tr>
-                  </template>
-                </template>
-              </template>
-            </template>
-          </tbody>
-        </table>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- 分页 -->
+            <div v-if="totalPages > 1" class="card-footer d-flex justify-content-between align-items-center py-2" v-permission="'profit:stats:view'">
+              <div class="small text-muted">
+                共 {{ totalItems }} 条记录
+              </div>
+              <nav>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)" title="上一页">
+                      <i class="bi bi-chevron-left"></i>
+                    </a>
+                  </li>
+                  <li v-for="page in displayedPages" 
+                      :key="page" 
+                      class="page-item"
+                      :class="{ active: currentPage === page, disabled: page === '...' }">
+                    <template v-if="page === '...'">
+                      <span class="page-link">{{ page }}</span>
+                    </template>
+                    <template v-else>
+                      <a class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
+                    </template>
+                  </li>
+                  <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)" title="下一页">
+                      <i class="bi bi-chevron-right"></i>
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

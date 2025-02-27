@@ -402,7 +402,26 @@ const submitUserForm = async () => {
     }
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(userModal.value).hide()
+    try {
+      if (userModal.value) {
+        const modalInstance = Modal.getInstance(userModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          userModal.value.classList.remove('show')
+          userModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadUsers()
   } catch (err) {
     message.error('操作失败: ' + (err.response?.data?.message || err.message))
@@ -418,7 +437,26 @@ const assignRoles = async () => {
     message.success('角色分配成功')
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(assignRolesModal.value).hide()
+    try {
+      if (assignRolesModal.value) {
+        const modalInstance = Modal.getInstance(assignRolesModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          assignRolesModal.value.classList.remove('show')
+          assignRolesModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadUsers()
   } catch (err) {
     message.error('角色分配失败: ' + (err.response?.data?.message || err.message))
@@ -432,7 +470,26 @@ const deleteUser = async () => {
     message.success('用户删除成功')
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(deleteConfirmModal.value).hide()
+    try {
+      if (deleteConfirmModal.value) {
+        const modalInstance = Modal.getInstance(deleteConfirmModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          deleteConfirmModal.value.classList.remove('show')
+          deleteConfirmModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadUsers()
   } catch (err) {
     message.error('删除失败: ' + (err.response?.data?.message || err.message))

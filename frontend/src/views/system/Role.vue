@@ -167,17 +167,35 @@
                     </label>
                   </div>
                   <div class="ms-4 mt-2">
-                    <div v-for="permission in module.children" :key="permission.id" class="form-check">
-                      <input 
-                        class="form-check-input" 
-                        type="checkbox" 
-                        :id="'permission-' + permission.id" 
-                        :value="permission.id" 
-                        v-model="selectedPermissions"
-                      >
-                      <label class="form-check-label" :for="'permission-' + permission.id">
-                        {{ permission.name }}
-                      </label>
+                    <div v-for="menu in module.children" :key="menu.id" class="permission-menu mb-2">
+                      <div class="form-check">
+                        <input 
+                          class="form-check-input" 
+                          type="checkbox" 
+                          :id="'menu-' + menu.id" 
+                          :value="menu.id" 
+                          v-model="selectedPermissions"
+                          @change="toggleMenuPermissions(menu)"
+                        >
+                        <label class="form-check-label fw-bold" :for="'menu-' + menu.id">
+                          {{ menu.name }}
+                        </label>
+                      </div>
+                      <!-- 渲染第三级权限（按钮权限） -->
+                      <div class="ms-4 mt-1" v-if="menu.children && menu.children.length > 0">
+                        <div v-for="button in menu.children" :key="button.id" class="form-check">
+                          <input 
+                            class="form-check-input" 
+                            type="checkbox" 
+                            :id="'button-' + button.id" 
+                            :value="button.id" 
+                            v-model="selectedPermissions"
+                          >
+                          <label class="form-check-label" :for="'button-' + button.id">
+                            {{ button.name }}
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -367,7 +385,26 @@ const submitRoleForm = async () => {
     }
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(roleModal.value).hide()
+    try {
+      if (roleModal.value) {
+        const modalInstance = Modal.getInstance(roleModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          roleModal.value.classList.remove('show')
+          roleModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadRoles()
   } catch (err) {
     message.error('操作失败: ' + (err.response?.data?.message || err.message))
@@ -379,7 +416,19 @@ const toggleModulePermissions = (module) => {
   const moduleSelected = selectedPermissions.value.includes(module.id)
   
   // 获取模块下所有子权限ID
-  const childPermissionIds = module.children.map(permission => permission.id)
+  const childPermissionIds = []
+  
+  // 收集所有子菜单及其按钮权限
+  module.children.forEach(menu => {
+    childPermissionIds.push(menu.id)
+    
+    // 收集菜单下的按钮权限
+    if (menu.children && menu.children.length > 0) {
+      menu.children.forEach(button => {
+        childPermissionIds.push(button.id)
+      })
+    }
+  })
   
   if (moduleSelected) {
     // 如果选中模块，则添加所有子权限
@@ -394,6 +443,26 @@ const toggleModulePermissions = (module) => {
   }
 }
 
+// 切换菜单下所有按钮权限
+const toggleMenuPermissions = (menu) => {
+  const menuSelected = selectedPermissions.value.includes(menu.id)
+  
+  // 获取菜单下所有按钮权限ID
+  const buttonPermissionIds = menu.children ? menu.children.map(button => button.id) : []
+  
+  if (menuSelected) {
+    // 如果选中菜单，则添加所有按钮权限
+    buttonPermissionIds.forEach(id => {
+      if (!selectedPermissions.value.includes(id)) {
+        selectedPermissions.value.push(id)
+      }
+    })
+  } else {
+    // 如果取消选中菜单，则移除所有按钮权限
+    selectedPermissions.value = selectedPermissions.value.filter(id => !buttonPermissionIds.includes(id))
+  }
+}
+
 // 分配权限
 const assignPermissions = async () => {
   try {
@@ -403,7 +472,27 @@ const assignPermissions = async () => {
     message.success('权限分配成功')
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(assignPermissionsModal.value).hide()
+    try {
+      // 使用更安全的方式关闭模态框
+      if (assignPermissionsModal.value) {
+        const modalInstance = Modal.getInstance(assignPermissionsModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          assignPermissionsModal.value.classList.remove('show')
+          assignPermissionsModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadRoles()
   } catch (err) {
     message.error('权限分配失败: ' + (err.response?.data?.message || err.message))
@@ -417,7 +506,26 @@ const deleteRole = async () => {
     message.success('角色删除成功')
     
     // 关闭模态框并刷新列表
-    Modal.getInstance(deleteConfirmModal.value).hide()
+    try {
+      if (deleteConfirmModal.value) {
+        const modalInstance = Modal.getInstance(deleteConfirmModal.value)
+        if (modalInstance) {
+          modalInstance.hide()
+        } else {
+          // 如果无法获取模态框实例，使用原生方法关闭
+          deleteConfirmModal.value.classList.remove('show')
+          deleteConfirmModal.value.style.display = 'none'
+          document.body.classList.remove('modal-open')
+          const backdrop = document.querySelector('.modal-backdrop')
+          if (backdrop && backdrop.parentNode) {
+            backdrop.parentNode.removeChild(backdrop)
+          }
+        }
+      }
+    } catch (modalError) {
+      console.error('关闭模态框失败:', modalError)
+    }
+    
     loadRoles()
   } catch (err) {
     message.error('删除失败: ' + (err.response?.data?.message || err.message))
@@ -467,7 +575,7 @@ onMounted(() => {
 }
 
 .permission-tree {
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
   border: 1px solid #dee2e6;
   border-radius: 0.25rem;
@@ -475,10 +583,45 @@ onMounted(() => {
 }
 
 .permission-module {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #e9ecef;
 }
 
 .permission-module:last-child {
   margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.permission-menu {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dotted #f8f9fa;
+}
+
+.permission-menu:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.form-check-label.fw-bold {
+  font-weight: 600;
+}
+
+/* 权限类型标识 */
+.permission-module > .form-check > .form-check-label::after {
+  content: " (模块)";
+  font-size: 0.75rem;
+  color: #0d6efd;
+  font-weight: normal;
+}
+
+.permission-menu > .form-check > .form-check-label::after {
+  content: " (菜单)";
+  font-size: 0.75rem;
+  color: #198754;
+  font-weight: normal;
 }
 </style> 

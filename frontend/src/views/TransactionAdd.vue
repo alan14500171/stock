@@ -1238,8 +1238,27 @@ const submitNewStock = async () => {
       form.value.stock_code = newStock.value.code
       form.value.stock_name = newStock.value.name
       form.value.market = newStock.value.market
-      const modal = Modal.getInstance(addStockModal.value)
-      modal.hide()
+      
+      try {
+        if (addStockModal.value) {
+          const modal = Modal.getInstance(addStockModal.value)
+          if (modal) {
+            modal.hide()
+          } else {
+            // 如果无法获取模态框实例，使用原生方法关闭
+            addStockModal.value.classList.remove('show')
+            addStockModal.value.style.display = 'none'
+            document.body.classList.remove('modal-open')
+            const backdrop = document.querySelector('.modal-backdrop')
+            if (backdrop && backdrop.parentNode) {
+              backdrop.parentNode.removeChild(backdrop)
+            }
+          }
+        }
+      } catch (modalError) {
+        console.error('关闭模态框失败:', modalError)
+      }
+      
       newStock.value = {
         market: 'HK',
         code: '',

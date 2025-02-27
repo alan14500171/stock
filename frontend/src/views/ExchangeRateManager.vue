@@ -1,218 +1,204 @@
 <template>
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h4 class="mb-0">汇率管理</h4>
-      <div class="btn-group">
-        <button type="button" class="btn btn-sm btn-outline-secondary" @click="toggleSearch">
-          <i :class="['fas', searchVisible ? 'fa-chevron-up' : 'fa-search']"></i>
-          {{ searchVisible ? '收起' : '搜索' }}
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" @click="updateTemporaryRates">
-          <i class="fas fa-sync-alt"></i> 更新临时汇率
-        </button>
-        <button type="button" class="btn btn-sm btn-primary" @click="openAddModal">
-          <i class="fas fa-plus"></i> 添加汇率
-        </button>
+  <div class="container-fluid">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">汇率管理</h5>
+        <div class="btn-group">
+          <button class="btn btn-primary btn-sm" @click="showAddDialog" v-permission="'exchange:rate:add'">
+            <i class="bi bi-plus-lg"></i> 添加汇率
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" @click="fetchMissingRates" v-permission="'exchange:rate:fetch'">
+            <i class="bi bi-cloud-download"></i> 获取缺失汇率
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- 搜索表单 -->
-    <div v-show="searchVisible" class="card-body border-bottom">
-      <form @submit.prevent="search" class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label small">开始日期
-            <i class="fas fa-question-circle text-muted ms-1" 
-               data-bs-toggle="tooltip" 
-               data-bs-placement="top"
-               title="支持快速输入：
-t 或 today: 今天
-y 或 yday: 昨天
-tm 或 tmr: 明天
-+n/-n: n天后/前
-日期格式：
-MMDD: 0315
-MM-DD: 03-15
-M.D: 3.15
-DD: 15"></i>
-          </label>
-          <input
-            type="text"
-            class="form-control"
-            :value="startDateDisplayValue"
-            @input="handleStartDateInput"
-            @blur="handleStartDateBlur"
-            @keydown.enter.prevent="focusNext($event, 'endDate')"
-            @keydown.tab="focusNext($event, 'endDate')"
-            placeholder="YYYY-MM-DD"
-            ref="startDate"
-          />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">结束日期</label>
-          <input
-            type="text"
-            class="form-control"
-            :value="endDateDisplayValue"
-            @input="handleEndDateInput"
-            @blur="handleEndDateBlur"
-            @keydown.enter.prevent="focusNext($event, 'currency')"
-            @keydown.tab="focusNext($event, 'currency')"
-            placeholder="YYYY-MM-DD"
-            ref="endDate"
-          />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small">货币</label>
-          <select 
-            class="form-select form-select-sm" 
-            v-model="searchForm.currency"
-            ref="currency"
-            @keydown.enter.prevent="focusNext($event, 'search')"
-            @keydown.tab="focusNext($event, 'search')"
-          >
-            <option value="">全部</option>
-            <option value="USD">USD</option>
-            <option value="CNY">CNY</option>
-          </select>
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-sm btn-primary w-100" :disabled="loading" ref="searchBtn">
-            <i class="fas fa-search"></i> 查询
-          </button>
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="button" class="btn btn-sm btn-outline-secondary w-100" @click="resetSearch">
-            <i class="fas fa-undo"></i> 重置
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>日期</th>
-              <th>货币</th>
-              <th class="text-end">汇率</th>
-              <th>数据来源</th>
-              <th>更新时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-if="!loading">
-              <tr v-for="rate in exchangeRates" :key="rate.id">
-                <td>{{ formatDate(rate.rate_date) }}</td>
-                <td>{{ rate.currency }}/HKD</td>
-                <td class="text-end">{{ formatNumber(rate.rate, 4) }}</td>
-                <td>{{ getSourceName(rate.source) }}</td>
-                <td>{{ formatDateTime(rate.created_at) }}</td>
-                <td>
-                  <div class="d-flex gap-1">
-                    <button class="btn btn-outline-primary btn-xs" @click="openEditModal(rate)">
-                      <i class="fas fa-edit text-primary"></i> 编辑
-                    </button>
-                    <button class="btn btn-outline-danger btn-xs" @click="confirmDelete(rate)">
-                      <i class="fas fa-trash text-danger"></i> 删除
-                    </button>
-                  </div>
+      <div class="card-body p-0" v-permission="'exchange:rate:view'">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>日期</th>
+                <th>USD/HKD</th>
+                <th>HKD/USD</th>
+                <th>更新时间</th>
+                <th class="text-end">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-if="!loading">
+                <template v-if="rates.length > 0">
+                  <tr v-for="rate in rates" :key="rate.id">
+                    <td>{{ formatDate(rate.date) }}</td>
+                    <td>{{ formatNumber(rate.usd_to_hkd) }}</td>
+                    <td>{{ formatNumber(rate.hkd_to_usd) }}</td>
+                    <td>{{ formatDateTime(rate.updated_at) }}</td>
+                    <td>
+                      <div class="d-flex justify-content-end gap-1">
+                        <button 
+                          class="btn btn-link btn-xs p-0 text-primary" 
+                          title="编辑" 
+                          @click="editRate(rate)"
+                          v-permission="'exchange:rate:edit'"
+                        >
+                          编辑
+                        </button>
+                        <button 
+                          class="btn btn-link btn-xs p-0 text-danger ms-2" 
+                          title="删除" 
+                          @click="confirmDelete(rate)"
+                          v-permission="'exchange:rate:delete'"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <tr v-else>
+                  <td colspan="5" class="text-center py-3">
+                    <div class="text-muted">暂无数据</div>
+                  </td>
+                </tr>
+              </template>
+              <tr v-else>
+                <td colspan="5" class="text-center py-3">
+                  <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                  加载中...
                 </td>
               </tr>
-            </template>
-            <tr v-else>
-              <td colspan="6" class="text-center py-3">
-                <div class="spinner-border spinner-border-sm text-primary me-2"></div>
-                加载中...
-              </td>
-            </tr>
-            <tr v-if="!loading && exchangeRates.length === 0">
-              <td colspan="6" class="text-center py-4">
-                <p class="text-muted mb-2">暂无汇率记录</p>
-                <button class="btn btn-primary btn-sm" @click="openAddModal">
-                  添加第一条记录
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
 
-      <!-- 分页 -->
-      <div v-if="totalPages > 1" class="card-footer d-flex justify-content-center">
-        <nav>
-          <ul class="pagination pagination-sm mb-0">
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)">
-                <i class="fas fa-chevron-left"></i>
-              </a>
-            </li>
-            <li v-for="page in displayedPages" 
-                :key="page" 
-                class="page-item"
-                :class="{ active: currentPage === page, disabled: page === '...' }">
-              <template v-if="page === '...'">
-                <span class="page-link">{{ page }}</span>
-              </template>
-              <template v-else>
-                <a class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
-              </template>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)">
-                <i class="fas fa-chevron-right"></i>
-              </a>
-            </li>
-          </ul>
-        </nav>
+        <!-- 分页 -->
+        <div v-if="totalPages > 1" class="card-footer d-flex justify-content-between align-items-center py-2">
+          <div class="small text-muted">
+            共 {{ totalItems }} 条记录
+          </div>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)" title="上一页">
+                  <i class="bi bi-chevron-left"></i>
+                </a>
+              </li>
+              <li v-for="page in displayedPages" 
+                  :key="page" 
+                  class="page-item"
+                  :class="{ active: currentPage === page, disabled: page === '...' }">
+                <template v-if="page === '...'">
+                  <span class="page-link">{{ page }}</span>
+                </template>
+                <template v-else>
+                  <a class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
+                </template>
+              </li>
+              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)" title="下一页">
+                  <i class="bi bi-chevron-right"></i>
+                </a>
+              </li>
+            </ul>
+          </nav>
+        </div>
       </div>
     </div>
 
-    <!-- 添加/编辑汇率模态框 -->
-    <div class="modal fade" id="rateModal" tabindex="-1">
+    <!-- 添加/编辑汇率对话框 -->
+    <div class="modal fade" id="rateModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">{{ isEdit ? '编辑汇率' : '添加汇率' }}</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h5 class="modal-title">{{ editData ? '编辑汇率' : '添加汇率' }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" v-permission="editData ? 'exchange:rate:edit' : 'exchange:rate:add'">
             <form @submit.prevent="submitForm">
               <div class="mb-3">
                 <label class="form-label">日期</label>
-                <date-input v-model="form.rateDate" :class="{ 'is-invalid': errors.rateDate }" />
-                <div class="invalid-feedback">{{ errors.rateDate }}</div>
+                <input 
+                  type="date" 
+                  class="form-control" 
+                  v-model="form.date"
+                  :class="{ 'is-invalid': errors.date }"
+                  :readonly="!!editData"
+                />
+                <div class="invalid-feedback" v-if="errors.date">{{ errors.date }}</div>
               </div>
+              
               <div class="mb-3">
-                <label class="form-label">货币</label>
-                <select class="form-select" v-model="form.currency" :class="{ 'is-invalid': errors.currency }">
-                  <option value="">请选择货币</option>
-                  <option value="USD">USD</option>
-                  <option value="CNY">CNY</option>
-                </select>
-                <div class="invalid-feedback">{{ errors.currency }}</div>
+                <label class="form-label">USD/HKD 汇率</label>
+                <input 
+                  type="number" 
+                  class="form-control" 
+                  v-model="form.usd_to_hkd"
+                  :class="{ 'is-invalid': errors.usd_to_hkd }"
+                  step="0.0001"
+                  min="0"
+                />
+                <div class="invalid-feedback" v-if="errors.usd_to_hkd">{{ errors.usd_to_hkd }}</div>
+                <small class="form-text text-muted">1美元可兑换多少港元</small>
               </div>
+              
               <div class="mb-3">
-                <label class="form-label">汇率</label>
-                <input type="number" class="form-control" v-model="form.rate" step="0.0001" min="0"
-                       :class="{ 'is-invalid': errors.rate }" />
-                <div class="invalid-feedback">{{ errors.rate }}</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">数据来源</label>
-                <select class="form-select" v-model="form.source">
-                  <option value="MANUAL">手动修改</option>
-                  <option value="TEMPORARY">临时数据</option>
-                  <option value="EXCHANGE_RATES_API">自动更新</option>
-                </select>
+                <label class="form-label">HKD/USD 汇率</label>
+                <input 
+                  type="number" 
+                  class="form-control" 
+                  v-model="form.hkd_to_usd"
+                  :class="{ 'is-invalid': errors.hkd_to_usd }"
+                  step="0.0001"
+                  min="0"
+                />
+                <div class="invalid-feedback" v-if="errors.hkd_to_usd">{{ errors.hkd_to_usd }}</div>
+                <small class="form-text text-muted">1港元可兑换多少美元</small>
               </div>
             </form>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-            <button type="button" class="btn btn-primary" @click="submitForm" :disabled="submitting">
-              {{ submitting ? '保存中...' : '保存' }}
+            <button 
+              type="button" 
+              class="btn btn-primary" 
+              @click="submitForm"
+              :disabled="submitting"
+              v-permission="editData ? 'exchange:rate:edit' : 'exchange:rate:add'"
+            >
+              <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+              {{ editData ? '保存' : '添加' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认对话框 -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">确认删除</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>确定要删除 <strong>{{ formatDate(selectedRate?.date) }}</strong> 的汇率记录吗？</p>
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              此操作不可恢复！删除汇率可能会影响相关日期的交易记录计算。
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button 
+              type="button" 
+              class="btn btn-danger" 
+              @click="deleteRate"
+              :disabled="submitting"
+              v-permission="'exchange:rate:delete'"
+            >
+              <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+              确认删除
             </button>
           </div>
         </div>

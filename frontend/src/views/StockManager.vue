@@ -15,7 +15,7 @@
       </div>
 
       <!-- 搜索表单 -->
-      <div v-show="searchVisible" class="card-body border-bottom">
+      <div v-show="searchVisible" class="card-body border-bottom" v-permission="'stock:list:view'">
         <form @submit.prevent="search" class="row g-2 align-items-end">
           <div class="col-md-3">
             <select class="form-select form-select-sm" v-model="searchForm.market" @change="search" data-testid="stock-market-select">
@@ -35,7 +35,7 @@
             />
           </div>
           <div class="col-md-3">
-            <button class="btn btn-primary btn-sm px-4" type="button" @click="search" data-testid="stock-search-btn">
+            <button class="btn btn-primary btn-sm px-4" type="button" @click="search" data-testid="stock-search-btn" v-permission="'stock:list:view'">
               查询
             </button>
           </div>
@@ -99,7 +99,7 @@
         </div>
 
         <!-- 分页 -->
-        <div v-if="totalPages > 1" class="card-footer d-flex justify-content-between align-items-center py-2">
+        <div v-if="totalPages > 1" class="card-footer d-flex justify-content-between align-items-center py-2" v-permission="'stock:list:view'">
           <div class="small text-muted">
             共 {{ totalItems }} 条记录
           </div>

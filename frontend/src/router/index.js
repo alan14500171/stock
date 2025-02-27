@@ -85,7 +85,8 @@ const routes = [
     component: ProfitStats,
     meta: { 
       title: '收益统计',
-      requiresAuth: true 
+      requiresAuth: true,
+      permission: 'profit:stats:view'
     }
   },
   {

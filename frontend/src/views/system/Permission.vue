@@ -20,7 +20,7 @@
             :data="permissionTree"
             :props="defaultProps"
             node-key="id"
-            default-expand-all
+            :default-expanded-keys="[]"
             :expand-on-click-node="false"
             highlight-current
           >
