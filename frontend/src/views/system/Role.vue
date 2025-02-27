@@ -1,5 +1,5 @@
 <template>
-  <div class="container-fluid mt-3">
+  <div class="container mt-3">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5>角色管理</h5>
@@ -445,6 +445,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 .card {
   box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
