@@ -6,7 +6,7 @@ import ChangePassword from '../views/auth/ChangePassword.vue'
 import Home from '../views/Home.vue'
 import StockManager from '../views/StockManager.vue'
 import TransactionList from '../views/TransactionList.vue'
-import ProfitStats from '../views/profit/Stats.vue'
+import ProfitStats from '../views/ProfitStats.vue'
 import ExchangeRateManager from '../views/ExchangeRateManager.vue'
 import NotFound from '../views/NotFound.vue'
 
