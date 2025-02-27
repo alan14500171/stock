@@ -188,7 +188,7 @@ const logout = () => {
 
 // 方法：打开修改密码模态框
 const openPasswordChangeModal = () => {
-  passwordChangeModal.value.open()
+  passwordChangeModal.value.openModal()
 }
 
 // 方法：初始化Bootstrap下拉菜单
