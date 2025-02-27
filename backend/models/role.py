@@ -116,4 +116,7 @@ class Role:
                 WHERE ur.user_id = %s
             """
             data = db.fetch_all(sql, (user_id,))
-            return [Role(item) for item in data] 
+            return [Role(item) for item in data]
+        except Exception as e:
+            logger.error(f"获取用户角色失败: {str(e)}")
+            return [] 

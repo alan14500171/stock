@@ -3,7 +3,7 @@
 """
 from .user import User
 from .stock_model import Stock
-from .transaction import Transaction, TransactionType
+from .transaction import StockTransaction, TransactionDetail
 from .exchange import ExchangeRate
 from .role import Role
 from .permission import Permission
@@ -13,8 +13,8 @@ from .role_permission import RolePermission
 __all__ = [
     'User', 
     'Stock', 
-    'Transaction', 
-    'TransactionType', 
+    'StockTransaction', 
+    'TransactionDetail', 
     'ExchangeRate',
     'Role',
     'Permission',
