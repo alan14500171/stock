@@ -12,7 +12,7 @@
               v-model="searchName"
               @keyup.enter="loadRoles"
             >
-            <button class="btn btn-outline-secondary" type="button" @click="loadRoles">
+            <button class="btn btn-outline-secondary" type="button" @click="loadRoles" v-permission="'system:role:view'">
               <i class="bi bi-search"></i>
             </button>
           </div>
@@ -25,7 +25,7 @@
           </button>
         </div>
       </div>
-      <div class="card-body">
+      <div class="card-body" v-permission="'system:role:view'">
         <div class="table-responsive">
           <table class="table table-striped table-hover">
             <thead>
@@ -48,7 +48,7 @@
                     <button 
                       class="btn btn-sm btn-outline-primary" 
                       @click="showEditRoleModal(role)"
-                      v-permission="'system:role:update'"
+                      v-permission="'system:role:edit'"
                     >
                       <i class="bi bi-pencil"></i>
                     </button>

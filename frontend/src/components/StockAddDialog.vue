@@ -7,7 +7,7 @@
             <h5 class="modal-title" data-testid="dialog-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
             <button type="button" class="btn-close" @click="handleClose" data-testid="close-btn"></button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" v-permission="editData ? 'stock:list:edit' : 'stock:list:add'">
             <form @submit.prevent="handleSubmit">
               <div class="mb-3">
                 <label class="form-label" data-testid="stock-code-label">股票代码</label>
@@ -90,6 +90,7 @@
               @click="handleSubmit"
               :disabled="submitting"
               data-testid="submit-btn"
+              v-permission="editData ? 'stock:list:edit' : 'stock:list:add'"
             >
               <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
               {{ editData ? '保存修改' : '确认添加' }}

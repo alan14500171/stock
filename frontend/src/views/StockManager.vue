@@ -1,40 +1,48 @@
 <template>
   <div class="container-fluid">
     <div class="card">
-      <div class="card-header">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="mb-0" data-testid="stock-manager-title">股票管理</h5>
-          <button class="btn btn-primary btn-sm" @click="showAddDialog" data-testid="add-stock-btn">
-            添加股票
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">股票管理</h5>
+        <div class="btn-group">
+          <button class="btn btn-primary btn-sm" @click="showAddDialog" v-permission="'stock:list:add'">
+            <i class="bi bi-plus-lg"></i> 添加股票
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" @click="toggleSearch">
+            <i :class="['bi', searchVisible ? 'bi-chevron-up' : 'bi-search']"></i>
+            {{ searchVisible ? '收起' : '搜索' }}
           </button>
         </div>
-        
-        <div class="d-flex align-items-center">
-          <div class="me-3" style="width: 200px;">
+      </div>
+
+      <!-- 搜索表单 -->
+      <div v-show="searchVisible" class="card-body border-bottom">
+        <form @submit.prevent="search" class="row g-2 align-items-end">
+          <div class="col-md-3">
             <select class="form-select form-select-sm" v-model="searchForm.market" @change="search" data-testid="stock-market-select">
               <option value="">市场</option>
-              <option value="HK">港股</option>
-              <option value="USA">美股</option>
+              <option value="HK">香港</option>
+              <option value="US">美国</option>
             </select>
           </div>
-          <div class="flex-grow-1 d-flex">
+          <div class="col-md-6">
             <input
               type="text"
-              class="form-control form-control-sm me-2"
-              v-model="searchForm.search"
-              placeholder="输入代码、名称搜索"
+              class="form-control form-control-sm"
+              v-model="searchForm.keyword"
+              placeholder="搜索股票代码或名称"
               @keyup.enter="search"
-              style="max-width: 300px;"
               data-testid="stock-search-input"
             />
+          </div>
+          <div class="col-md-3">
             <button class="btn btn-primary btn-sm px-4" type="button" @click="search" data-testid="stock-search-btn">
               查询
             </button>
           </div>
-        </div>
+        </form>
       </div>
 
-      <div class="card-body p-1">
+      <div class="card-body p-0" v-permission="'stock:list:view'">
         <div class="table-responsive" data-testid="stock-table-container">
           <table class="table table-hover align-middle mb-0">
             <thead>
@@ -64,10 +72,10 @@
                     <td>{{ formatDateTime(stock.price_updated_at) }}</td>
                     <td>
                       <div class="d-flex justify-content-end gap-1">
-                        <button class="btn btn-link btn-xs p-0 text-primary" title="编辑" @click="editStock(stock)" :data-testid="'edit-stock-btn-' + stock.code">
+                        <button class="btn btn-link btn-xs p-0 text-primary" title="编辑" @click="editStock(stock)" :data-testid="'edit-stock-btn-' + stock.code" v-permission="'stock:list:edit'">
                           编辑
                         </button>
-                        <button class="btn btn-link btn-xs p-0 text-danger ms-2" title="删除" @click="confirmDelete(stock)" :data-testid="'delete-stock-btn-' + stock.code">
+                        <button class="btn btn-link btn-xs p-0 text-danger ms-2" title="删除" @click="confirmDelete(stock)" :data-testid="'delete-stock-btn-' + stock.code" v-permission="'stock:list:delete'">
                           删除
                         </button>
                       </div>
@@ -123,12 +131,36 @@
         </div>
       </div>
 
-      <!-- 添加/编辑对话框 -->
+      <!-- 添加/编辑股票对话框 -->
       <stock-add-dialog
         v-model="showDialog"
         :edit-data="editData"
-        @success="handleSuccess"
+        @submit="handleDialogSubmit"
+        @close="handleDialogClose"
       />
+
+      <!-- 删除确认对话框 -->
+      <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">确认删除</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p>确定要删除股票 <strong>{{ selectedStock?.name }} ({{ selectedStock?.code }})</strong> 吗？</p>
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                此操作将删除该股票的所有相关交易记录，且不可恢复！
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+              <button type="button" class="btn btn-danger" @click="deleteStock">确认删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -146,11 +178,12 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const totalItems = ref(0)
 const pageSize = 15
+const searchVisible = ref(false)
 
 // 搜索表单
 const searchForm = ref({
   market: '',
-  search: ''
+  keyword: ''
 })
 
 // 显示添加对话框
@@ -184,7 +217,7 @@ const fetchStocks = async () => {
   try {
     const params = new URLSearchParams()
     if (searchForm.value.market) params.append('market', searchForm.value.market)
-    if (searchForm.value.search) params.append('search', searchForm.value.search)
+    if (searchForm.value.keyword) params.append('keyword', searchForm.value.keyword)
     params.append('page', currentPage.value)
     params.append('per_page', pageSize)
     
@@ -207,7 +240,7 @@ const fetchStocks = async () => {
 const resetSearch = () => {
   searchForm.value = {
     market: '',
-    search: ''
+    keyword: ''
   }
   currentPage.value = 1
   fetchStocks()
@@ -305,6 +338,26 @@ const formatDateTime = (datetime) => {
 onMounted(() => {
   fetchStocks()
 })
+
+// 添加股票管理相关的权限控制
+const toggleSearch = () => {
+  searchVisible.value = !searchVisible.value
+}
+
+const handleDialogSubmit = () => {
+  // 处理添加/编辑成功后的逻辑
+  fetchStocks()
+}
+
+const handleDialogClose = () => {
+  // 处理关闭对话框后的逻辑
+  fetchStocks()
+}
+
+const deleteStock = () => {
+  // 处理删除股票后的逻辑
+  fetchStocks()
+}
 </script>
 
 <style scoped>

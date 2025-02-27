@@ -13,7 +13,7 @@
           </button>
         </div>
       </div>
-      <div class="card-body">
+      <div class="card-body" v-permission="'system:permission:view'">
         <div class="permission-tree-container">
           <!-- 使用 Element Plus 的树形控件 -->
           <el-tree
@@ -126,7 +126,9 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="permissionDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitPermissionForm">保存</el-button>
+          <el-button type="primary" @click="submitPermissionForm" :loading="submitting">
+            {{ isEditing ? '更新' : '添加' }}
+          </el-button>
         </span>
       </template>
     </el-dialog>
@@ -138,17 +140,18 @@
       width="400px"
     >
       <div>
-        <p>确定要删除权限 "{{ selectedPermission?.name }}" 吗？此操作不可撤销。</p>
-        <el-alert
-          title="删除权限将同时删除其下所有子权限，且已分配给角色的权限将被移除。"
-          type="warning"
-          show-icon
-        />
+        确定要删除权限 <strong>{{ selectedPermission?.name }}</strong> 吗？
+        <p class="text-danger mt-2">
+          <i class="el-icon-warning"></i> 
+          此操作将同时删除该权限下的所有子权限，且不可恢复！
+        </p>
       </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="deleteDialogVisible = false">取消</el-button>
-          <el-button type="danger" @click="deletePermission">删除</el-button>
+          <el-button type="danger" @click="deletePermission" :loading="submitting">
+            确认删除
+          </el-button>
         </span>
       </template>
     </el-dialog>

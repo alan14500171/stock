@@ -8,11 +8,11 @@
             <input 
               type="text" 
               class="form-control" 
-              placeholder="搜索用户名" 
-              v-model="searchUsername"
+              placeholder="搜索用户名/姓名" 
+              v-model="searchName"
               @keyup.enter="loadUsers"
             >
-            <button class="btn btn-outline-secondary" type="button" @click="loadUsers">
+            <button class="btn btn-outline-secondary" type="button" @click="loadUsers" v-permission="'system:user:view'">
               <i class="bi bi-search"></i>
             </button>
           </div>
@@ -25,7 +25,7 @@
           </button>
         </div>
       </div>
-      <div class="card-body">
+      <div class="card-body" v-permission="'system:user:view'">
         <div class="table-responsive">
           <table class="table table-striped table-hover">
             <thead>
@@ -50,7 +50,7 @@
                   <span 
                     v-for="role in user.roles" 
                     :key="role.id" 
-                    class="badge bg-info me-1"
+                    class="badge bg-primary me-1"
                   >
                     {{ role.name }}
                   </span>
@@ -68,7 +68,7 @@
                     <button 
                       class="btn btn-sm btn-outline-primary" 
                       @click="showEditUserModal(user)"
-                      v-permission="'system:user:update'"
+                      v-permission="'system:user:edit'"
                     >
                       <i class="bi bi-pencil"></i>
                     </button>
@@ -89,7 +89,7 @@
                     <button 
                       class="btn btn-sm btn-outline-warning" 
                       @click="toggleUserStatus(user)"
-                      v-permission="'system:user:update'"
+                      v-permission="'system:user:edit'"
                     >
                       <i :class="user.status === 1 ? 'bi bi-x-circle' : 'bi bi-check-circle'"></i>
                     </button>
@@ -260,7 +260,7 @@ const message = useMessage()
 
 // 用户列表数据
 const users = ref([])
-const searchUsername = ref('')
+const searchName = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
@@ -322,8 +322,8 @@ const loadUsers = async () => {
       size: pageSize.value
     }
     
-    if (searchUsername.value) {
-      params.username = searchUsername.value
+    if (searchName.value) {
+      params.name = searchName.value
     }
     
     const response = await axios.get('/api/system/user/list', { params })

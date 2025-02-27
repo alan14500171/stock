@@ -1,5 +1,5 @@
 <template>
-  <div class="card">
+  <div class="card" v-permission="'transaction:records:add'">
     <div class="card-header">
       <h5 class="mb-0" data-testid="transaction-add-title">添加交易记录</h5>
     </div>

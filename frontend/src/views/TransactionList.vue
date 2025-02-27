@@ -3,7 +3,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0">交易记录</h5>
       <div class="btn-group">
-        <button class="btn btn-primary btn-sm" @click="addTransaction">
+        <button class="btn btn-primary btn-sm" @click="addTransaction" v-permission="'transaction:records:add'">
           <i class="fas fa-plus me-1"></i>添加记录
         </button>
         <button class="btn btn-outline-secondary btn-sm" @click="toggleSearch">
@@ -92,7 +92,7 @@
       </form>
     </div>
 
-    <div class="card-body p-0">
+    <div class="card-body p-0" v-permission="'transaction:records:view'">
       <div class="table-responsive">
         <table class="table table-hover table-sm mb-0">
           <thead class="table-light">
@@ -118,7 +118,7 @@
             </tr>
           </thead>
           <tbody>
-            <template v-if="!loading">
+            <template v-if="!loading && transactions.length > 0">
               <tr v-for="transaction in sortedTransactions" :key="transaction.id">
                 <td>{{ formatDate(transaction.transaction_date) }}</td>
                 <td>{{ transaction.market }}</td>
@@ -173,6 +173,7 @@
                       @click="editTransaction(transaction)" 
                       title="编辑"
                       style="min-width: 32px; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 0.2rem;"
+                      v-permission="'transaction:records:edit'"
                     >
                       编辑
                     </button>
@@ -181,6 +182,7 @@
                       @click="confirmDelete(transaction)" 
                       title="删除"
                       style="min-width: 32px; padding: 0.15rem 0.5rem; font-size: 0.75rem; border-radius: 0.2rem;"
+                      v-permission="'transaction:records:delete'"
                     >
                       删除
                     </button>
@@ -188,6 +190,11 @@
                 </td>
               </tr>
             </template>
+            <tr v-else-if="!loading && transactions.length === 0">
+              <td colspan="15" class="text-center py-3">
+                <div class="text-muted">暂无数据</div>
+              </td>
+            </tr>
             <tr v-else>
               <td colspan="15" class="text-center py-3">
                 <div class="spinner-border spinner-border-sm text-primary me-2"></div>
