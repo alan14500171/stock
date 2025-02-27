@@ -13,6 +13,7 @@ class Permission:
         self.name = data.get('name') if data else None
         self.code = data.get('code') if data else None  # 权限唯一标识符
         self.description = data.get('description') if data else None
+        self.type = data.get('type', 3) if data else 3  # 权限类型：1-模块，2-菜单，3-按钮，4-数据，5-接口
         self.parent_id = data.get('parent_id') if data else None  # 父权限ID，用于树状结构
         self.path = data.get('path') if data else None  # 权限路径，用于快速查询
         self.level = data.get('level', 0) if data else 0  # 权限层级
@@ -31,13 +32,13 @@ class Permission:
                 # 更新
                 sql = """
                     UPDATE stock.permissions 
-                    SET name = %s, code = %s, description = %s, parent_id = %s,
+                    SET name = %s, code = %s, description = %s, type = %s, parent_id = %s,
                         path = %s, level = %s, sort_order = %s, is_menu = %s,
                         icon = %s, component = %s, route_path = %s, updated_at = NOW() 
                     WHERE id = %s
                 """
                 params = (
-                    self.name, self.code, self.description, self.parent_id,
+                    self.name, self.code, self.description, self.type, self.parent_id,
                     self.path, self.level, self.sort_order, self.is_menu,
                     self.icon, self.component, self.route_path, self.id
                 )
@@ -46,12 +47,12 @@ class Permission:
                 # 新增
                 sql = """
                     INSERT INTO stock.permissions 
-                    (name, code, description, parent_id, path, level, sort_order, 
+                    (name, code, description, type, parent_id, path, level, sort_order, 
                      is_menu, icon, component, route_path, created_at, updated_at) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                 """
                 params = (
-                    self.name, self.code, self.description, self.parent_id,
+                    self.name, self.code, self.description, self.type, self.parent_id,
                     self.path, self.level, self.sort_order, self.is_menu,
                     self.icon, self.component, self.route_path
                 )
@@ -139,12 +140,25 @@ class Permission:
         
     def to_dict(self):
         """转换为字典"""
+        # 获取父级权限名称
+        parent_name = None
+        if self.parent_id:
+            try:
+                sql = "SELECT name FROM stock.permissions WHERE id = %s"
+                result = db.fetch_one(sql, (self.parent_id,))
+                if result:
+                    parent_name = result['name']
+            except Exception as e:
+                logger.error(f"获取父级权限名称失败: {str(e)}")
+        
         return {
             'id': self.id,
             'name': self.name,
             'code': self.code,
             'description': self.description,
+            'type': self.type,
             'parent_id': self.parent_id,
+            'parent_name': parent_name,  # 添加父级权限名称
             'path': self.path,
             'level': self.level,
             'sort_order': self.sort_order,

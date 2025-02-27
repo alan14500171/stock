@@ -100,6 +100,7 @@ def add_permission():
             'name': name,
             'code': code,
             'description': data.get('description'),
+            'type': int(data.get('type', 3)),  # 确保处理type字段
             'parent_id': data.get('parent_id'),
             'sort_order': data.get('sort_order', 0),
             'is_menu': data.get('is_menu', False),
@@ -159,6 +160,9 @@ def update_permission(permission_id):
             
         if 'description' in data:
             permission.description = data['description']
+            
+        if 'type' in data:
+            permission.type = int(data['type'])
             
         if 'parent_id' in data:
             permission.parent_id = data['parent_id']

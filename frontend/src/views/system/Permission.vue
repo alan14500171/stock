@@ -135,29 +135,26 @@
                     v-model="parentSearchQuery"
                     @input="filterParentPermissions"
                   >
-                  <button class="btn btn-outline-secondary" type="button" @click="parentSearchQuery = ''; filterParentPermissions()">
+                  <button 
+                    class="btn btn-outline-secondary" 
+                    type="button"
+                    @click="parentSearchQuery = ''; filterParentPermissions()"
+                  >
                     <i class="bi bi-x"></i>
                   </button>
                 </div>
-                <select 
-                  class="form-select" 
-                  id="parent_id" 
-                  v-model="permissionForm.parent_id"
-                  size="6"
-                >
-                  <option value="0">无（顶级权限）</option>
+                <select class="form-select" id="parent_id" v-model="permissionForm.parent_id">
+                  <option value="0">无 (作为顶级权限)</option>
                   <option 
                     v-for="parent in filteredParentPermissions" 
                     :key="parent.id" 
-                    :value="parent.id"
-                    :style="{ paddingLeft: (parent.level * 10) + 'px' }"
+                    :value="parent.id.toString()"
                   >
-                    {{ '│'.repeat(parent.level) }} {{ parent.level > 0 ? '├─ ' : '' }}{{ parent.name }} 
-                    <span class="text-muted">({{ getTypeName(parent.type) }})</span>
+                    {{ '│'.repeat(parent.level) }} {{ parent.level > 0 ? '├─ ' : '' }}{{ parent.name }} ({{ getTypeName(parent.type) }})
                   </option>
                 </select>
                 <div class="form-text">
-                  选择合适的父级权限可以构建清晰的权限层级结构
+                  选择适当的父级权限，建立清晰的权限层级结构。模块通常作为顶级权限，菜单作为模块的子权限，按钮作为菜单的子权限。
                 </div>
               </div>
               <div class="text-end">
