@@ -135,7 +135,7 @@ const handleLogin = async () => {
       // 使用setTimeout确保DOM更新完成后再跳转
       setTimeout(() => {
         console.log('准备跳转到:', redirectPath)
-        // 使用强制刷新页面的方式跳转，确保导航栏正确加载
+        // 使用window.location.href进行完全刷新，确保导航栏正确显示
         window.location.href = redirectPath
       }, 500) // 增加延迟时间，确保DOM更新完成
     }

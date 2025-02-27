@@ -22,22 +22,37 @@ const router = useRouter()
 
 // 检查登录状态
 onMounted(async () => {
+  console.log('Welcome组件挂载，开始检查登录状态')
+  
   // 检查本地存储中的登录状态
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  console.log('本地存储登录状态:', isLoggedIn)
+  
   if (isLoggedIn) {
-    router.push('/home')
+    console.log('用户已登录，准备跳转到首页')
+    // 使用window.location.href进行完全刷新，确保导航栏正确显示
+    window.location.href = '/home'
     return
   }
   
   // 如果本地存储没有登录状态，尝试从API检查
   try {
+    console.log('尝试从API检查登录状态')
     const response = await axios.get('/api/auth/check_login')
+    console.log('API登录状态检查响应:', response.data)
+    
     if (response.data.is_authenticated) {
+      console.log('API确认用户已登录')
       localStorage.setItem('isLoggedIn', 'true')
       if (response.data.user) {
+        console.log('存储用户信息:', response.data.user)
         localStorage.setItem('user', JSON.stringify(response.data.user))
       }
-      router.push('/home')
+      console.log('准备跳转到首页')
+      // 使用window.location.href进行完全刷新，确保导航栏正确显示
+      window.location.href = '/home'
+    } else {
+      console.log('API确认用户未登录')
     }
   } catch (error) {
     console.error('检查登录状态失败:', error)

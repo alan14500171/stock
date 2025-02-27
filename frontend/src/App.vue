@@ -195,11 +195,22 @@ const openPasswordChangeModal = () => {
 const initBootstrapDropdowns = () => {
   console.log('初始化Bootstrap下拉菜单')
   if (typeof window !== 'undefined') {
+    // 确保Bootstrap已加载
+    if (!window.bootstrap && typeof bootstrap !== 'undefined') {
+      console.log('从导入的bootstrap设置window.bootstrap')
+      window.bootstrap = bootstrap
+    }
+    
     if (window.bootstrap) {
       try {
         // 检查导航栏是否显示
         const navbar = document.querySelector('.navbar')
-        if (!navbar || getComputedStyle(navbar).display === 'none') {
+        if (!navbar) {
+          console.log('导航栏元素不存在，跳过初始化下拉菜单')
+          return
+        }
+        
+        if (getComputedStyle(navbar).display === 'none') {
           console.log('导航栏不可见，跳过初始化下拉菜单')
           return
         }
@@ -233,6 +244,15 @@ const initBootstrapDropdowns = () => {
     } else {
       console.warn('Bootstrap未加载，无法初始化下拉菜单')
       console.log('window对象上可用的属性:', Object.keys(window).filter(key => key.startsWith('b')))
+      
+      // 尝试从CDN加载Bootstrap
+      console.log('尝试从全局变量获取Bootstrap')
+      setTimeout(() => {
+        if (window.bootstrap) {
+          console.log('成功从全局变量获取Bootstrap，重新尝试初始化')
+          initBootstrapDropdowns()
+        }
+      }, 500)
     }
   }
 }
@@ -258,29 +278,37 @@ watch(isAuthenticated, (newValue) => {
 onMounted(() => {
   console.log('App组件挂载')
   
-  // 如果已登录，预加载权限
-  if (isAuthenticated.value && !permissionStore.loaded) {
-    console.log('组件挂载，加载权限')
-    permissionStore.loadPermissions()
-  }
-  
-  // 确保Bootstrap的下拉菜单正常工作
-  nextTick(() => {
-    console.log('组件挂载后初始化下拉菜单(第一次)')
-    setTimeout(initBootstrapDropdowns, 300)
+  // 导入Bootstrap
+  import('bootstrap').then(module => {
+    console.log('动态导入Bootstrap成功')
+    window.bootstrap = module
+    
+    // 如果已登录，预加载权限
+    if (isAuthenticated.value && !permissionStore.loaded) {
+      console.log('组件挂载，加载权限')
+      permissionStore.loadPermissions()
+    }
+    
+    // 确保Bootstrap的下拉菜单正常工作
+    nextTick(() => {
+      console.log('组件挂载后初始化下拉菜单(第一次)')
+      setTimeout(initBootstrapDropdowns, 300)
+    })
+    
+    // 再次尝试初始化下拉菜单（以防第一次尝试失败）
+    setTimeout(() => {
+      console.log('组件挂载后初始化下拉菜单(第二次)')
+      initBootstrapDropdowns()
+    }, 1000)
+    
+    // 第三次尝试初始化下拉菜单
+    setTimeout(() => {
+      console.log('组件挂载后初始化下拉菜单(第三次)')
+      initBootstrapDropdowns()
+    }, 2000)
+  }).catch(error => {
+    console.error('动态导入Bootstrap失败:', error)
   })
-  
-  // 再次尝试初始化下拉菜单（以防第一次尝试失败）
-  setTimeout(() => {
-    console.log('组件挂载后初始化下拉菜单(第二次)')
-    initBootstrapDropdowns()
-  }, 1000)
-  
-  // 第三次尝试初始化下拉菜单
-  setTimeout(() => {
-    console.log('组件挂载后初始化下拉菜单(第三次)')
-    initBootstrapDropdowns()
-  }, 2000)
   
   // 监听路由变化，在路由变化后重新初始化下拉菜单
   router.beforeEach((to, from, next) => {

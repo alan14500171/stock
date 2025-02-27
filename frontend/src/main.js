@@ -18,11 +18,25 @@ window.bootstrap = bootstrap
 // 确保Bootstrap正确初始化
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM加载完成，初始化Bootstrap组件')
+  
+  // 确保Bootstrap已加载
+  if (!window.bootstrap) {
+    console.log('从全局变量设置window.bootstrap')
+    window.bootstrap = bootstrap
+  }
+  
   // 初始化所有下拉菜单
-  const dropdownElementList = document.querySelectorAll('.dropdown-toggle')
-  dropdownElementList.forEach(dropdownToggleEl => {
-    new bootstrap.Dropdown(dropdownToggleEl)
-  })
+  setTimeout(() => {
+    const dropdownElementList = document.querySelectorAll('.dropdown-toggle')
+    console.log('找到下拉菜单元素数量:', dropdownElementList.length)
+    
+    if (dropdownElementList.length > 0) {
+      dropdownElementList.forEach((dropdownToggleEl, index) => {
+        console.log(`初始化第${index+1}个下拉菜单`)
+        new bootstrap.Dropdown(dropdownToggleEl)
+      })
+    }
+  }, 500)
 })
 
 // 配置axios
