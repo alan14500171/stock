@@ -89,13 +89,23 @@
               </div>
               <div class="mb-3">
                 <label for="code" class="form-label">权限标识</label>
-                <input 
-                  type="text" 
-                  class="form-control" 
-                  id="code" 
-                  v-model="permissionForm.code"
-                  required
-                >
+                <div class="input-group">
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="code" 
+                    v-model="permissionForm.code"
+                    required
+                  >
+                  <button 
+                    class="btn btn-outline-secondary" 
+                    type="button"
+                    @click="generatePermissionCode"
+                    title="根据父级权限和名称自动生成权限标识"
+                  >
+                    <i class="bi bi-magic"></i> 自动生成
+                  </button>
+                </div>
                 <div class="form-text">例如：system:user:view</div>
               </div>
               <div class="mb-3">
@@ -104,20 +114,51 @@
                   <option value="1">模块</option>
                   <option value="2">菜单</option>
                   <option value="3">按钮</option>
+                  <option value="4">数据</option>
+                  <option value="5">接口</option>
                 </select>
+                <div class="form-text">
+                  <span class="badge bg-primary me-1">模块</span>: 顶级功能模块
+                  <span class="badge bg-success me-1 ms-2">菜单</span>: 可导航的菜单项
+                  <span class="badge bg-info me-1 ms-2">按钮</span>: 页面上的操作按钮
+                  <span class="badge bg-warning me-1 ms-2">数据</span>: 数据访问权限
+                  <span class="badge bg-secondary me-1 ms-2">接口</span>: API接口调用权限
+                </div>
               </div>
               <div class="mb-3">
                 <label for="parent_id" class="form-label">父级权限</label>
-                <select class="form-select" id="parent_id" v-model="permissionForm.parent_id">
+                <div class="input-group mb-2">
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    placeholder="搜索权限..." 
+                    v-model="parentSearchQuery"
+                    @input="filterParentPermissions"
+                  >
+                  <button class="btn btn-outline-secondary" type="button" @click="parentSearchQuery = ''; filterParentPermissions()">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+                <select 
+                  class="form-select" 
+                  id="parent_id" 
+                  v-model="permissionForm.parent_id"
+                  size="6"
+                >
                   <option value="0">无（顶级权限）</option>
                   <option 
-                    v-for="parent in parentPermissions" 
+                    v-for="parent in filteredParentPermissions" 
                     :key="parent.id" 
                     :value="parent.id"
+                    :style="{ paddingLeft: (parent.level * 10) + 'px' }"
                   >
-                    {{ parent.name }}
+                    {{ '│'.repeat(parent.level) }} {{ parent.level > 0 ? '├─ ' : '' }}{{ parent.name }} 
+                    <span class="text-muted">({{ getTypeName(parent.type) }})</span>
                   </option>
                 </select>
+                <div class="form-text">
+                  选择合适的父级权限可以构建清晰的权限层级结构
+                </div>
               </div>
               <div class="text-end">
                 <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">取消</button>
@@ -185,6 +226,10 @@ const selectedPermission = ref(null)
 // 父级权限选项（排除当前编辑的权限及其子权限）
 const parentPermissions = ref([])
 
+// 父级权限搜索
+const parentSearchQuery = ref('')
+const filteredParentPermissions = ref([])
+
 // 加载权限列表
 const loadPermissions = async () => {
   try {
@@ -215,6 +260,9 @@ const loadParentPermissions = async () => {
   } catch (err) {
     message.error('加载父级权限失败: ' + (err.response?.data?.message || err.message))
   }
+  
+  // 初始化过滤后的父级权限
+  filteredParentPermissions.value = parentPermissions.value
 }
 
 // 获取权限的所有子权限ID（包括自身）
@@ -310,7 +358,9 @@ const getTypeName = (type) => {
   const types = {
     1: '模块',
     2: '菜单',
-    3: '按钮'
+    3: '按钮',
+    4: '数据',
+    5: '接口'
   }
   return types[type] || '未知'
 }
@@ -320,9 +370,98 @@ const getTypeClass = (type) => {
   const classes = {
     1: 'badge bg-primary',
     2: 'badge bg-success',
-    3: 'badge bg-info'
+    3: 'badge bg-info',
+    4: 'badge bg-warning',
+    5: 'badge bg-secondary'
   }
   return classes[type] || 'badge bg-secondary'
+}
+
+// 过滤父级权限
+const filterParentPermissions = () => {
+  if (!parentSearchQuery.value) {
+    filteredParentPermissions.value = parentPermissions.value
+    return
+  }
+  
+  const query = parentSearchQuery.value.toLowerCase()
+  filteredParentPermissions.value = parentPermissions.value.filter(p => 
+    p.name.toLowerCase().includes(query) || 
+    p.code.toLowerCase().includes(query)
+  )
+}
+
+// 自动生成权限代码
+const generatePermissionCode = () => {
+  if (!permissionForm.value.name) {
+    message.warning('请先填写权限名称')
+    return
+  }
+  
+  // 获取父级权限的代码前缀
+  let prefix = ''
+  if (permissionForm.value.parent_id && permissionForm.value.parent_id !== '0') {
+    const parentPerm = parentPermissions.value.find(p => p.id == permissionForm.value.parent_id)
+    if (parentPerm) {
+      // 从父级权限代码中提取前缀
+      const parts = parentPerm.code.split(':')
+      // 如果父级是按钮或数据权限，只取模块和菜单部分
+      if (parentPerm.type == '3' || parentPerm.type == '4' || parentPerm.type == '5') {
+        prefix = parts.slice(0, 2).join(':')
+      } else {
+        prefix = parentPerm.code
+      }
+    }
+  }
+  
+  // 如果没有父级或找不到父级，使用默认前缀
+  if (!prefix) {
+    prefix = 'system'
+  }
+  
+  // 根据权限类型生成操作部分
+  let operation = ''
+  const permName = permissionForm.value.name.toLowerCase()
+    .replace(/[^\w\u4e00-\u9fa5]/g, '') // 移除特殊字符
+    .replace(/[\u4e00-\u9fa5]/g, c => {
+      // 中文转拼音首字母（简化处理）
+      const pinyinMap = {
+        '增加': 'add', '添加': 'add', '新增': 'add', '创建': 'create',
+        '修改': 'edit', '编辑': 'edit', '更新': 'update',
+        '删除': 'delete', '移除': 'remove',
+        '查看': 'view', '查询': 'query', '搜索': 'search', '列表': 'list',
+        '导出': 'export', '导入': 'import',
+        '上传': 'upload', '下载': 'download',
+        '启用': 'enable', '禁用': 'disable',
+        '审核': 'audit', '审批': 'approve',
+        '重置': 'reset', '刷新': 'refresh'
+      }
+      
+      // 检查常见操作词
+      for (const [cn, en] of Object.entries(pinyinMap)) {
+        if (permName.includes(cn)) {
+          return en
+        }
+      }
+      
+      // 默认返回空字符串
+      return ''
+    })
+  
+  // 如果没有从名称中提取到操作，根据权限类型设置默认操作
+  if (!operation) {
+    switch (permissionForm.value.type) {
+      case '1': operation = 'manage'; break; // 模块
+      case '2': operation = 'view'; break;   // 菜单
+      case '3': operation = 'operate'; break; // 按钮
+      case '4': operation = 'access'; break;  // 数据
+      case '5': operation = 'api'; break;     // 接口
+      default: operation = 'access';
+    }
+  }
+  
+  // 组合生成权限代码
+  permissionForm.value.code = `${prefix}:${operation}`
 }
 
 // 页面加载时获取数据
