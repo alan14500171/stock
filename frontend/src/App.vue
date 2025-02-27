@@ -31,6 +31,11 @@
             </ul>
             <ul class="navbar-nav ms-auto">
               <li class="nav-item">
+                <a href="#" class="nav-link" @click.prevent="openPasswordModal">
+                  <i class="bi bi-key"></i> 修改密码
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="#" class="nav-link" @click.prevent="handleLogout">
                   <i class="bi bi-box-arrow-right"></i> 退出登录
                 </a>
@@ -46,6 +51,9 @@
         <component :is="Component" />
       </transition>
     </router-view>
+    
+    <!-- 密码修改弹窗组件 -->
+    <PasswordChangeModal ref="passwordChangeModal" />
   </div>
 </template>
 
@@ -54,10 +62,19 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import useMessage from './composables/useMessage'
+import PasswordChangeModal from './components/PasswordChangeModal.vue'
 
 const router = useRouter()
 const message = useMessage()
 const isAuthenticated = ref(false)
+const passwordChangeModal = ref(null)
+
+// 打开密码修改弹窗
+const openPasswordModal = () => {
+  if (passwordChangeModal.value) {
+    passwordChangeModal.value.openModal()
+  }
+}
 
 // 检查登录状态
 const checkAuth = async () => {

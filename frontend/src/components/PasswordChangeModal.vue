@@ -1,11 +1,14 @@
 <template>
-  <div class="container mt-4">
-    <div class="row justify-content-center">
-      <div class="col-md-6">
-        <div class="card shadow-sm">
-          <div class="card-body p-4">
-            <h4 class="text-center mb-4">修改密码</h4>
-            
+  <div class="password-change-modal">
+    <!-- 弹窗 -->
+    <div class="modal fade" id="passwordChangeModal" tabindex="-1" aria-labelledby="passwordChangeModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="passwordChangeModalLabel">修改密码</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
             <!-- 成功提示 -->
             <div v-if="success" class="alert alert-success alert-dismissible fade show" role="alert">
               {{ success }}
@@ -16,6 +19,12 @@
             <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
               {{ error }}
               <button type="button" class="btn-close" @click="error = ''"></button>
+            </div>
+            
+            <!-- 提示信息 -->
+            <div class="alert alert-info mb-4">
+              <i class="bi bi-info-circle me-2"></i>
+              为了保障账户安全，请定期修改密码。建议使用包含字母、数字和特殊字符的强密码。
             </div>
 
             <form @submit.prevent="handleChangePassword">
@@ -48,7 +57,7 @@
               </div>
 
               <!-- 确认新密码 -->
-              <div class="form-floating mb-4">
+              <div class="form-floating mb-3">
                 <input 
                   type="password" 
                   class="form-control" 
@@ -63,27 +72,19 @@
                   两次输入的新密码不一致
                 </div>
               </div>
-
-              <!-- 按钮 -->
-              <div class="d-grid gap-2">
-                <button 
-                  type="submit" 
-                  class="btn btn-primary"
-                  :disabled="loading || !isFormValid"
-                >
-                  <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-                  {{ loading ? '提交中...' : '修改密码' }}
-                </button>
-                
-                <router-link 
-                  :to="{ name: 'Home' }" 
-                  class="btn btn-outline-secondary"
-                  :disabled="loading"
-                >
-                  返回首页
-                </router-link>
-              </div>
             </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button 
+              type="button" 
+              class="btn btn-primary"
+              @click="handleChangePassword"
+              :disabled="loading || !isFormValid"
+            >
+              <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+              {{ loading ? '提交中...' : '修改密码' }}
+            </button>
           </div>
         </div>
       </div>
@@ -92,12 +93,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import useMessage from '../composables/useMessage'
 
-const router = useRouter()
+// 引入Bootstrap的Modal
+let passwordModal = null
+
+onMounted(() => {
+  // 动态导入Bootstrap的Modal组件
+  import('bootstrap/js/dist/modal').then(module => {
+    const Modal = module.default
+    // 初始化Modal
+    passwordModal = new Modal(document.getElementById('passwordChangeModal'))
+  })
+})
+
 const message = useMessage()
 
 const form = reactive({
@@ -123,6 +134,27 @@ const isFormValid = computed(() => {
          form.confirmPassword && 
          form.newPassword === form.confirmPassword
 })
+
+// 打开弹窗
+const openModal = () => {
+  if (passwordModal) {
+    // 重置表单
+    form.currentPassword = ''
+    form.newPassword = ''
+    form.confirmPassword = ''
+    error.value = ''
+    success.value = ''
+    
+    passwordModal.show()
+  }
+}
+
+// 关闭弹窗
+const closeModal = () => {
+  if (passwordModal) {
+    passwordModal.hide()
+  }
+}
 
 const handleChangePassword = async () => {
   if (loading.value) return
@@ -157,6 +189,11 @@ const handleChangePassword = async () => {
       form.currentPassword = ''
       form.newPassword = ''
       form.confirmPassword = ''
+      
+      // 3秒后关闭弹窗
+      setTimeout(() => {
+        closeModal()
+      }, 3000)
     } else {
       error.value = response.data.message || '密码修改失败'
     }
@@ -167,12 +204,33 @@ const handleChangePassword = async () => {
     loading.value = false
   }
 }
+
+// 导出方法供外部使用
+defineExpose({
+  openModal,
+  closeModal
+})
 </script>
 
 <style scoped>
-.card {
+.modal-content {
   border: none;
   border-radius: 10px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  border-bottom: 1px solid #e9ecef;
+  background-color: #f8f9fa;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.modal-footer {
+  border-top: 1px solid #e9ecef;
+  background-color: #f8f9fa;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
 }
 
 .form-floating > label {
@@ -194,24 +252,19 @@ const handleChangePassword = async () => {
   border-color: #0a58ca;
 }
 
-.btn-outline-secondary {
-  color: #6c757d;
-  border-color: #6c757d;
-}
-
-.btn-outline-secondary:hover {
-  color: #fff;
-  background-color: #6c757d;
-  border-color: #6c757d;
-}
-
 .alert {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   font-size: 0.875rem;
 }
 
 .spinner-border {
   width: 1rem;
   height: 1rem;
+}
+
+.alert-info {
+  background-color: #cff4fc;
+  border-color: #b6effb;
+  color: #055160;
 }
 </style> 

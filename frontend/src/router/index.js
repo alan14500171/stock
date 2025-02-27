@@ -30,15 +30,6 @@ const routes = [
     }
   },
   {
-    path: '/auth/change-password',
-    name: 'ChangePassword',
-    component: () => import('../views/ChangePassword.vue'),
-    meta: {
-      title: '修改密码',
-      requiresAuth: true
-    }
-  },
-  {
     path: '/profit/stats',
     name: 'ProfitStats',
     component: () => import('@/views/ProfitStats.vue'),
