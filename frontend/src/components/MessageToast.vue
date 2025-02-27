@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { useMessage } from '../composables/useMessage'
+import { useMessage } from '@/composables/useMessage'
 
 const { messages, removeMessage } = useMessage()
 </script>

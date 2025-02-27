@@ -31,8 +31,8 @@ onMounted(async () => {
   
   // 如果本地存储没有登录状态，尝试从API检查
   try {
-    const response = await axios.get('/api/auth/check')
-    if (response.data.authenticated) {
+    const response = await axios.get('/api/auth/check_login')
+    if (response.data.is_authenticated) {
       localStorage.setItem('isLoggedIn', 'true')
       if (response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user))
