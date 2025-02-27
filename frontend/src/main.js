@@ -4,6 +4,11 @@ import App from './App.vue'
 import router from './router'
 import axios from 'axios'
 
+// 导入Element Plus
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+
 // 导入Bootstrap的CSS和JavaScript
 import 'bootstrap/dist/css/bootstrap.min.css'
 import * as bootstrap from 'bootstrap'
@@ -63,6 +68,11 @@ axios.interceptors.request.use(config => {
 
 // 创建应用实例
 const app = createApp(App)
+
+// 注册Element Plus
+app.use(ElementPlus, {
+  locale: zhCn,
+})
 
 // 注册全局属性
 app.config.globalProperties.$axios = axios
