@@ -30,12 +30,12 @@ const routes = [
     }
   },
   {
-    path: '/auth/register',
-    name: 'Register',
-    component: () => import('../views/Register.vue'),
+    path: '/auth/change-password',
+    name: 'ChangePassword',
+    component: () => import('../views/ChangePassword.vue'),
     meta: {
-      title: '注册',
-      requiresAuth: false
+      title: '修改密码',
+      requiresAuth: true
     }
   },
   {
@@ -119,7 +119,7 @@ router.beforeEach(async (to, from, next) => {
           query: { redirect: to.fullPath }
         })
       }
-    } else if ((to.name === 'Login' || to.name === 'Register') && from.name !== 'Login') {
+    } else if ((to.name === 'Login') && from.name !== 'Login') {
       try {
         const response = await axios.get('/api/auth/check_login', {
           withCredentials: true

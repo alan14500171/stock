@@ -4,10 +4,9 @@
       <div class="container">
         <router-link class="navbar-brand" :to="isAuthenticated ? '/home' : '/'">股票交易记录系统</router-link>
         
-        <!-- 未登录状态显示登录注册按钮 -->
+        <!-- 未登录状态显示登录按钮 -->
         <div v-if="!isAuthenticated" class="navbar-nav ms-auto">
           <router-link to="/auth/login" class="nav-link">登录</router-link>
-          <router-link to="/auth/register" class="nav-link">注册</router-link>
         </div>
 
         <!-- 登录状态显示完整导航菜单 -->
@@ -66,10 +65,8 @@ const checkAuth = async () => {
     const response = await axios.get('/api/auth/check_login')
     isAuthenticated.value = response.data.is_authenticated
     
-    // 如果已登录但在登录页面或注册页面，重定向到首页
-    if (isAuthenticated.value && 
-        (router.currentRoute.value.name === 'Login' || 
-         router.currentRoute.value.name === 'Register')) {
+    // 如果已登录但在登录页面，重定向到首页
+    if (isAuthenticated.value && router.currentRoute.value.name === 'Login') {
       const redirectPath = router.currentRoute.value.query.redirect || '/home'
       router.push(redirectPath)
     }

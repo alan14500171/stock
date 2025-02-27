@@ -8,9 +8,6 @@
         <router-link to="/auth/login" class="btn btn-primary btn-lg px-4">
           登录
         </router-link>
-        <router-link to="/auth/register" class="btn btn-outline-primary btn-lg px-4">
-          注册
-        </router-link>
       </div>
     </div>
   </div>

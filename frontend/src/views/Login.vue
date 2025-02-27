@@ -50,14 +50,6 @@
                 <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
                 {{ loading ? '登录中...' : '登录' }}
               </button>
-              
-              <router-link 
-                :to="{ name: 'Register' }" 
-                class="btn btn-outline-secondary"
-                :disabled="loading"
-              >
-                注册新账号
-              </router-link>
             </div>
           </form>
         </div>
