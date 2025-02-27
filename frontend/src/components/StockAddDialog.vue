@@ -105,7 +105,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import axios from 'axios'
-import useMessage from '../composables/useMessage'
+import { useMessage } from '../composables/useMessage'
 
 const props = defineProps({
   modelValue: Boolean,

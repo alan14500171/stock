@@ -161,7 +161,7 @@ import { Modal } from 'bootstrap'
 import { useMessage } from '@/composables/useMessage'
 
 // 消息提示
-const { success, error } = useMessage()
+const message = useMessage()
 
 // 权限列表数据
 const permissions = ref([])
@@ -191,7 +191,7 @@ const loadPermissions = async () => {
     const response = await axios.get('/api/system/permission/list')
     permissions.value = response.data.data
   } catch (err) {
-    error('加载权限列表失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载权限列表失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -213,7 +213,7 @@ const loadParentPermissions = async () => {
       parentPermissions.value = allPermissions
     }
   } catch (err) {
-    error('加载父级权限失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载父级权限失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -276,18 +276,18 @@ const submitPermissionForm = async () => {
     if (isEditing.value) {
       // 编辑权限
       await axios.put(`/api/system/permission/update/${permissionForm.value.id}`, permissionForm.value)
-      success('权限更新成功')
+      message.success('权限更新成功')
     } else {
       // 添加权限
       await axios.post('/api/system/permission/add', permissionForm.value)
-      success('权限添加成功')
+      message.success('权限添加成功')
     }
     
     // 关闭模态框并刷新列表
     Modal.getInstance(permissionModal.value).hide()
     loadPermissions()
   } catch (err) {
-    error('操作失败: ' + (err.response?.data?.message || err.message))
+    message.error('操作失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -295,13 +295,13 @@ const submitPermissionForm = async () => {
 const deletePermission = async () => {
   try {
     await axios.delete(`/api/system/permission/delete/${selectedPermission.value.id}`)
-    success('权限删除成功')
+    message.success('权限删除成功')
     
     // 关闭模态框并刷新列表
     Modal.getInstance(deleteConfirmModal.value).hide()
     loadPermissions()
   } catch (err) {
-    error('删除失败: ' + (err.response?.data?.message || err.message))
+    message.error('删除失败: ' + (err.response?.data?.message || err.message))
   }
 }
 

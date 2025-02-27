@@ -30,7 +30,7 @@ def get_role_list():
             params.append(f"%{name}%")
             
         # 获取总数
-        count_sql = sql.replace("*", "COUNT(*)")
+        count_sql = sql.replace("*", "COUNT(*) as count")
         total = db.fetch_one(count_sql, params)['count']
         
         # 分页

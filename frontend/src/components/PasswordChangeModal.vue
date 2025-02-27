@@ -95,7 +95,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
-import useMessage from '../composables/useMessage'
+import { useMessage } from '../composables/useMessage'
 
 // 引入Bootstrap的Modal
 let passwordModal = null

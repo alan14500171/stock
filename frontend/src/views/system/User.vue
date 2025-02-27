@@ -256,7 +256,7 @@ import { Modal } from 'bootstrap'
 import { useMessage } from '@/composables/useMessage'
 
 // 消息提示
-const { success, error } = useMessage()
+const message = useMessage()
 
 // 用户列表数据
 const users = ref([])
@@ -330,7 +330,7 @@ const loadUsers = async () => {
     users.value = response.data.data.items
     total.value = response.data.data.total
   } catch (err) {
-    error('加载用户列表失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载用户列表失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -340,7 +340,7 @@ const loadAllRoles = async () => {
     const response = await axios.get('/api/system/role/all')
     allRoles.value = response.data.data
   } catch (err) {
-    error('加载角色列表失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载角色列表失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -394,18 +394,18 @@ const submitUserForm = async () => {
     if (isEditing.value) {
       // 编辑用户
       await axios.put(`/api/system/user/update/${userForm.value.id}`, userForm.value)
-      success('用户更新成功')
+      message.success('用户更新成功')
     } else {
       // 添加用户
       await axios.post('/api/system/user/add', userForm.value)
-      success('用户添加成功')
+      message.success('用户添加成功')
     }
     
     // 关闭模态框并刷新列表
     Modal.getInstance(userModal.value).hide()
     loadUsers()
   } catch (err) {
-    error('操作失败: ' + (err.response?.data?.message || err.message))
+    message.error('操作失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -415,13 +415,13 @@ const assignRoles = async () => {
     await axios.post(`/api/system/user/assign-roles/${selectedUser.value.id}`, {
       role_ids: selectedRoles.value
     })
-    success('角色分配成功')
+    message.success('角色分配成功')
     
     // 关闭模态框并刷新列表
     Modal.getInstance(assignRolesModal.value).hide()
     loadUsers()
   } catch (err) {
-    error('角色分配失败: ' + (err.response?.data?.message || err.message))
+    message.error('角色分配失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -429,13 +429,13 @@ const assignRoles = async () => {
 const deleteUser = async () => {
   try {
     await axios.delete(`/api/system/user/delete/${selectedUser.value.id}`)
-    success('用户删除成功')
+    message.success('用户删除成功')
     
     // 关闭模态框并刷新列表
     Modal.getInstance(deleteConfirmModal.value).hide()
     loadUsers()
   } catch (err) {
-    error('删除失败: ' + (err.response?.data?.message || err.message))
+    message.error('删除失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -446,10 +446,10 @@ const toggleUserStatus = async (user) => {
     await axios.put(`/api/system/user/update/${user.id}`, {
       status: newStatus
     })
-    success(`用户${newStatus === 1 ? '启用' : '禁用'}成功`)
+    message.success(`用户${newStatus === 1 ? '启用' : '禁用'}成功`)
     loadUsers()
   } catch (err) {
-    error('操作失败: ' + (err.response?.data?.message || err.message))
+    message.error('操作失败: ' + (err.response?.data?.message || err.message))
   }
 }
 

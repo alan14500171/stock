@@ -243,7 +243,7 @@ def get_transaction_logs():
         sql += " GROUP BY t.id, t.market, t.stock_code, s.code_name, t.transaction_type, t.transaction_date, t.transaction_code"
         
         # 获取总记录数
-        count_sql = f"SELECT COUNT(*) as total FROM stock.stock_transactions t WHERE t.user_id = %s"
+        count_sql = f"SELECT COUNT(*) as count FROM stock.stock_transactions t WHERE t.user_id = %s"
         count_params = [session['user_id']]
         
         if start_date:
@@ -263,7 +263,7 @@ def get_transaction_logs():
             count_params.append(transaction_type)
             
         total_result = db.fetch_one(count_sql, count_params)
-        total = total_result['COUNT(*)'] if total_result else 0
+        total = total_result['count'] if total_result else 0
         
         # 添加排序和分页
         sql += " ORDER BY t.transaction_date DESC, t.id DESC LIMIT %s OFFSET %s"
@@ -362,7 +362,7 @@ def get_stocks():
             params.extend([search_pattern, search_pattern])
             
         # 计算总记录数
-        count_sql = "SELECT COUNT(*) FROM stocks WHERE 1=1"
+        count_sql = "SELECT COUNT(*) as count FROM stocks WHERE 1=1"
         count_params = []
         
         if market:
@@ -374,7 +374,7 @@ def get_stocks():
             count_params.extend([search_pattern, search_pattern])
         
         total_result = db.fetch_one(count_sql, count_params)
-        total = total_result['COUNT(*)'] if total_result else 0
+        total = total_result['count'] if total_result else 0
         
         # 添加排序和分页
         sql += " ORDER BY match_priority, market, code LIMIT %s OFFSET %s"
@@ -676,9 +676,9 @@ def get_exchange_rates():
             params.append(end_date)
             
         # 计算总记录数
-        count_sql = sql.replace("*", "COUNT(*)")
+        count_sql = sql.replace("*", "COUNT(*) as count")
         total = db.fetch_one(count_sql, params)
-        total_count = total['COUNT(*)'] if total else 0
+        total_count = total['count'] if total else 0
         
         # 添加排序和分页
         sql += " ORDER BY rate_date DESC, currency"

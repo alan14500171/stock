@@ -56,7 +56,7 @@ import axios from 'axios'
 import { useMessage } from '../../composables/useMessage'
 
 const router = useRouter()
-const { success, error } = useMessage()
+const message = useMessage()
 
 const passwordForm = ref({
   currentPassword: '',
@@ -97,7 +97,7 @@ const changePassword = async () => {
       new_password: passwordForm.value.newPassword
     })
     
-    success('密码修改成功，请重新登录')
+    message.success('密码修改成功，请重新登录')
     
     // 清除登录状态，重定向到登录页
     localStorage.removeItem('token')
@@ -108,7 +108,7 @@ const changePassword = async () => {
     } else {
       errorMessage.value = '修改密码失败，请稍后重试'
     }
-    error(errorMessage.value)
+    message.error(errorMessage.value)
   } finally {
     isSubmitting.value = false
   }

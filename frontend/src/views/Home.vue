@@ -31,10 +31,10 @@
                   </h5>
                   <p class="card-text">管理您的所有交易记录，添加新的交易。</p>
                   <div class="btn-group">
-                    <router-link to="/transactions" class="btn btn-success" data-testid="view-transactions-btn">
+                    <router-link to="/transaction/list" class="btn btn-success" data-testid="view-transactions-btn">
                       查看记录
                     </router-link>
-                    <router-link to="/transactions/add" class="btn btn-outline-success" data-testid="add-transaction-btn">
+                    <router-link to="/transaction/add" class="btn btn-outline-success" data-testid="add-transaction-btn">
                       添加交易
                     </router-link>
                   </div>
@@ -51,7 +51,7 @@
                     股票管理
                   </h5>
                   <p class="card-text">管理您的股票列表，添加新的股票。</p>
-                  <router-link to="/stocks" class="btn btn-info text-white" data-testid="manage-stocks-btn">
+                  <router-link to="/stock" class="btn btn-info text-white" data-testid="manage-stocks-btn">
                     管理股票
                   </router-link>
                 </div>
@@ -67,7 +67,7 @@
                     汇率管理
                   </h5>
                   <p class="card-text">更新和管理港币、美元等货币汇率。</p>
-                  <router-link to="/exchange-rates" class="btn btn-warning text-white" data-testid="manage-exchange-rates-btn">
+                  <router-link to="/exchange/rate" class="btn btn-warning text-white" data-testid="manage-exchange-rates-btn">
                     管理汇率
                   </router-link>
                 </div>

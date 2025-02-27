@@ -6,14 +6,27 @@ import axios from 'axios'
 
 // 导入Bootstrap的CSS和JavaScript
 import 'bootstrap/dist/css/bootstrap.min.css'
-import 'bootstrap/dist/js/bootstrap.bundle.min.js'
+import * as bootstrap from 'bootstrap'
 // 导入Bootstrap Icons
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './assets/main.css'
 import permissionDirective from './directives/permission'
 
+// 将Bootstrap挂载到window对象
+window.bootstrap = bootstrap
+
+// 确保Bootstrap正确初始化
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM加载完成，初始化Bootstrap组件')
+  // 初始化所有下拉菜单
+  const dropdownElementList = document.querySelectorAll('.dropdown-toggle')
+  dropdownElementList.forEach(dropdownToggleEl => {
+    new bootstrap.Dropdown(dropdownToggleEl)
+  })
+})
+
 // 配置axios
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:9099'
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:9009'
 axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
@@ -39,6 +52,7 @@ const app = createApp(App)
 
 // 注册全局属性
 app.config.globalProperties.$axios = axios
+app.config.globalProperties.$bootstrap = bootstrap
 
 // 注册Pinia
 app.use(createPinia())

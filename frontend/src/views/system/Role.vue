@@ -220,7 +220,7 @@ import { Modal } from 'bootstrap'
 import { useMessage } from '@/composables/useMessage'
 
 // 消息提示
-const { success, error } = useMessage()
+const message = useMessage()
 
 // 角色列表数据
 const roles = ref([])
@@ -291,7 +291,7 @@ const loadRoles = async () => {
     roles.value = response.data.data.items
     total.value = response.data.data.total
   } catch (err) {
-    error('加载角色列表失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载角色列表失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -301,7 +301,7 @@ const loadPermissionTree = async () => {
     const response = await axios.get('/api/system/permission/tree')
     permissionTree.value = response.data.data
   } catch (err) {
-    error('加载权限树失败: ' + (err.response?.data?.message || err.message))
+    message.error('加载权限树失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -340,7 +340,7 @@ const showAssignPermissionsModal = async (role) => {
     // 设置已选权限
     selectedPermissions.value = roleDetail.permissions.map(permission => permission.id)
   } catch (err) {
-    error('获取角色详情失败: ' + (err.response?.data?.message || err.message))
+    message.error('获取角色详情失败: ' + (err.response?.data?.message || err.message))
     return
   }
   
@@ -359,18 +359,18 @@ const submitRoleForm = async () => {
     if (isEditing.value) {
       // 编辑角色
       await axios.put(`/api/system/role/update/${roleForm.value.id}`, roleForm.value)
-      success('角色更新成功')
+      message.success('角色更新成功')
     } else {
       // 添加角色
       await axios.post('/api/system/role/add', roleForm.value)
-      success('角色添加成功')
+      message.success('角色添加成功')
     }
     
     // 关闭模态框并刷新列表
     Modal.getInstance(roleModal.value).hide()
     loadRoles()
   } catch (err) {
-    error('操作失败: ' + (err.response?.data?.message || err.message))
+    message.error('操作失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -400,13 +400,13 @@ const assignPermissions = async () => {
     await axios.post(`/api/system/role/assign-permissions/${selectedRole.value.id}`, {
       permission_ids: selectedPermissions.value
     })
-    success('权限分配成功')
+    message.success('权限分配成功')
     
     // 关闭模态框并刷新列表
     Modal.getInstance(assignPermissionsModal.value).hide()
     loadRoles()
   } catch (err) {
-    error('权限分配失败: ' + (err.response?.data?.message || err.message))
+    message.error('权限分配失败: ' + (err.response?.data?.message || err.message))
   }
 }
 
@@ -414,13 +414,13 @@ const assignPermissions = async () => {
 const deleteRole = async () => {
   try {
     await axios.delete(`/api/system/role/delete/${selectedRole.value.id}`)
-    success('角色删除成功')
+    message.success('角色删除成功')
     
     // 关闭模态框并刷新列表
     Modal.getInstance(deleteConfirmModal.value).hide()
     loadRoles()
   } catch (err) {
-    error('删除失败: ' + (err.response?.data?.message || err.message))
+    message.error('删除失败: ' + (err.response?.data?.message || err.message))
   }
 }
 

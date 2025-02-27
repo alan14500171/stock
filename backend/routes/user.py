@@ -30,7 +30,7 @@ def get_user_list():
             params.append(f"%{username}%")
             
         # 获取总数
-        count_sql = sql.replace("*", "COUNT(*)")
+        count_sql = sql.replace("*", "COUNT(*) as count")
         total = db.fetch_one(count_sql, params)['count']
         
         # 分页
@@ -71,6 +71,8 @@ def get_user_info():
     """获取当前用户信息"""
     try:
         user = get_current_user()
+        logger.info(f"获取用户信息: {user.username if user else 'None'}")
+        
         if not user:
             return jsonify({
                 'success': False,
@@ -78,19 +80,41 @@ def get_user_info():
             }), 401
             
         user_dict = user.to_dict()
+        logger.info(f"用户基本信息: {user_dict}")
         
         # 获取用户角色
         roles = Role.get_user_roles(user.id)
+        logger.info(f"用户角色: {[role.name for role in roles]}")
         user_dict['roles'] = [role.to_dict() for role in roles]
         
         # 获取用户权限
         from models import Permission
         permissions = Permission.get_user_permissions(user.id)
-        user_dict['permissions'] = [permission.code for permission in permissions]
+        logger.info(f"用户权限数量: {len(permissions)}")
+        
+        # 详细记录权限信息
+        permission_details = []
+        for p in permissions:
+            permission_details.append({
+                'id': p.id,
+                'name': p.name,
+                'code': p.code,
+                'is_menu': p.is_menu
+            })
+        logger.info(f"用户权限详情: {permission_details}")
+        
+        # 只返回权限代码列表
+        permission_codes = [permission.code for permission in permissions]
+        logger.info(f"用户权限代码: {permission_codes}")
+        user_dict['permissions'] = permission_codes
         
         # 获取用户菜单
         menus = [p for p in permissions if p.is_menu]
+        logger.info(f"用户菜单数量: {len(menus)}")
         user_dict['menus'] = [menu.to_dict() for menu in menus]
+        
+        # 记录最终返回的用户信息
+        logger.info(f"返回的用户信息: {user_dict}")
         
         return jsonify({
             'success': True,

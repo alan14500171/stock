@@ -62,7 +62,8 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
-import useMessage from '../composables/useMessage'
+import { useMessage } from '../composables/useMessage'
+import { usePermissionStore } from '../stores/permission'
 
 const router = useRouter()
 const route = useRoute()
@@ -83,19 +84,65 @@ const handleLogin = async () => {
   loading.value = true
   
   try {
+    console.log('开始登录请求...')
     const response = await axios.post('/api/auth/login', {
       username: form.value.username,
       password: form.value.password
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
     })
     
+    console.log('登录响应:', response.data)
+    
     if (response.data.success) {
+      // 后端API返回成功但没有token，使用cookie-based认证
       message.success('登录成功')
-      // 只触发登录成功事件，让 App.vue 处理重定向
-      window.dispatchEvent(new Event('login-success'))
+      console.log('登录成功，准备跳转到:', route.query.redirect || '/home')
+      
+      // 存储用户信息
+      if (response.data.user) {
+        console.log('存储用户信息:', response.data.user)
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+      }
+      
+      // 设置登录状态
+      localStorage.setItem('isLoggedIn', 'true')
+      
+      // 预加载权限
+      const permissionStore = usePermissionStore()
+      console.log('开始加载权限...')
+      try {
+        await permissionStore.loadPermissions()
+        console.log('权限加载成功')
+      } catch (permError) {
+        console.error('权限加载失败:', permError)
+        // 即使权限加载失败，也继续登录流程
+      }
+      
+      // 检查是否为管理员用户
+      const isAdmin = form.value.username === 'admin' || form.value.username === 'alan'
+      if (isAdmin) {
+        console.log('管理员用户登录，设置管理员权限')
+        permissionStore.setAdminPermissions()
+      }
+      
+      // 获取重定向路径
+      const redirectPath = route.query.redirect || '/home'
+      
+      // 使用setTimeout确保DOM更新完成后再跳转
+      setTimeout(() => {
+        console.log('准备跳转到:', redirectPath)
+        // 使用强制刷新页面的方式跳转，确保导航栏正确加载
+        window.location.href = redirectPath
+      }, 500) // 增加延迟时间，确保DOM更新完成
     }
   } catch (error) {
     console.error('登录失败:', error)
-    message.error(error.response?.data?.message || '登录失败')
+    error.value = error.response?.data?.message || '登录失败，请检查用户名和密码'
+    message.error(error.value)
   } finally {
     loading.value = false
   }

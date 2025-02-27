@@ -5,7 +5,7 @@
       <p class="lead mb-4">这是一个简单的股票交易记录管理系统，帮助您追踪港股和美股的交易记录。</p>
       
       <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
-        <router-link to="/auth/login" class="btn btn-primary btn-lg px-4">
+        <router-link to="/login" class="btn btn-primary btn-lg px-4">
           登录
         </router-link>
       </div>
@@ -22,9 +22,21 @@ const router = useRouter()
 
 // 检查登录状态
 onMounted(async () => {
+  // 检查本地存储中的登录状态
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (isLoggedIn) {
+    router.push('/home')
+    return
+  }
+  
+  // 如果本地存储没有登录状态，尝试从API检查
   try {
-    const response = await axios.get('/api/auth/check_login')
-    if (response.data.is_authenticated) {
+    const response = await axios.get('/api/auth/check')
+    if (response.data.authenticated) {
+      localStorage.setItem('isLoggedIn', 'true')
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+      }
       router.push('/home')
     }
   } catch (error) {
