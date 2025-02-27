@@ -11,6 +11,9 @@ from config.logging import setup_logging
 from routes.auth import auth_bp
 from routes.stock import stock_bp
 from routes.profit import profit_bp
+from routes.user import user_bp
+from routes.role import role_bp
+from routes.permission import permission_bp
 
 # 设置日志
 setup_logging()
@@ -54,6 +57,11 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(stock_bp, url_prefix='/api/stock')
     app.register_blueprint(profit_bp, url_prefix='/api/profit')
+    
+    # 注册权限管理相关蓝图
+    app.register_blueprint(user_bp, url_prefix='/api/system/user')
+    app.register_blueprint(role_bp, url_prefix='/api/system/role')
+    app.register_blueprint(permission_bp, url_prefix='/api/system/permission')
 
     # 配置日志
     if not os.path.exists('logs'):

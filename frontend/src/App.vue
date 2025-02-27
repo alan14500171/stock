@@ -28,12 +28,36 @@
               <li class="nav-item">
                 <router-link class="nav-link" :to="{name: 'StockManager'}">股票管理</router-link>
               </li>
+              
+              <!-- 系统管理下拉菜单 -->
+              <li class="nav-item dropdown" v-if="hasAnySystemPermission">
+                <a class="nav-link dropdown-toggle" href="#" id="systemDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <i class="bi bi-gear"></i> 系统管理
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="systemDropdown">
+                  <li v-if="hasPermission('system:user:view')">
+                    <router-link class="dropdown-item" :to="{name: 'SystemUser'}">
+                      <i class="bi bi-people me-2"></i>用户管理
+                    </router-link>
+                  </li>
+                  <li v-if="hasPermission('system:role:view')">
+                    <router-link class="dropdown-item" :to="{name: 'SystemRole'}">
+                      <i class="bi bi-person-badge me-2"></i>角色管理
+                    </router-link>
+                  </li>
+                  <li v-if="hasPermission('system:permission:view')">
+                    <router-link class="dropdown-item" :to="{name: 'SystemPermission'}">
+                      <i class="bi bi-key me-2"></i>权限管理
+                    </router-link>
+                  </li>
+                </ul>
+              </li>
             </ul>
             <ul class="navbar-nav ms-auto">
               <li class="nav-item">
-                <a href="#" class="nav-link" @click.prevent="openPasswordModal">
+                <router-link class="nav-link" :to="{name: 'ChangePassword'}">
                   <i class="bi bi-key"></i> 修改密码
-                </a>
+                </router-link>
               </li>
               <li class="nav-item">
                 <a href="#" class="nav-link" @click.prevent="handleLogout">
@@ -54,20 +78,38 @@
     
     <!-- 密码修改弹窗组件 -->
     <PasswordChangeModal ref="passwordChangeModal" />
+    <MessageToast />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import useMessage from './composables/useMessage'
 import PasswordChangeModal from './components/PasswordChangeModal.vue'
+import MessageToast from './components/MessageToast.vue'
+import { usePermissionStore } from './stores/permission'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
+const permissionStore = usePermissionStore()
 const isAuthenticated = ref(false)
+const username = ref('')
 const passwordChangeModal = ref(null)
+
+// 检查是否有任何系统管理相关权限
+const hasAnySystemPermission = computed(() => {
+  return permissionStore.hasPermission('system:user:list') || 
+         permissionStore.hasPermission('system:role:list') || 
+         permissionStore.hasPermission('system:permission:list')
+})
+
+// 检查是否有指定权限
+const hasPermission = (permission) => {
+  return permissionStore.hasPermission(permission)
+}
 
 // 打开密码修改弹窗
 const openPasswordModal = () => {
@@ -79,8 +121,16 @@ const openPasswordModal = () => {
 // 检查登录状态
 const checkAuth = async () => {
   try {
-    const response = await axios.get('/api/auth/check_login')
-    isAuthenticated.value = response.data.is_authenticated
+    const response = await axios.get('/api/auth/check')
+    isAuthenticated.value = response.data.authenticated
+    username.value = response.data.username || ''
+    
+    // 如果已登录，加载用户权限
+    if (isAuthenticated.value) {
+      await permissionStore.loadPermissions()
+    } else {
+      permissionStore.resetPermissions()
+    }
     
     // 如果已登录但在登录页面，重定向到首页
     if (isAuthenticated.value && router.currentRoute.value.name === 'Login') {
@@ -98,6 +148,8 @@ const checkAuth = async () => {
   } catch (error) {
     console.error('检查登录状态失败:', error)
     isAuthenticated.value = false
+    username.value = ''
+    permissionStore.resetPermissions()
   }
 }
 
@@ -115,6 +167,8 @@ const handleLogout = async () => {
     if (response.data.success) {
       isAuthenticated.value = false
       message.success('退出登录成功')
+      username.value = ''
+      permissionStore.resetPermissions()
       router.push('/')
     }
   } catch (error) {
@@ -123,9 +177,23 @@ const handleLogout = async () => {
   }
 }
 
+// 监听路由变化，检查登录状态
+watch(
+  () => route.path,
+  async (newPath) => {
+    // 如果是登录页面，不需要检查登录状态
+    if (newPath === '/auth/login') return
+    
+    // 如果未登录，检查登录状态
+    if (!isAuthenticated.value) {
+      await checkAuth()
+    }
+  }
+)
+
 // 组件挂载时添加事件监听
-onMounted(() => {
-  checkAuth()
+onMounted(async () => {
+  await checkAuth()
   window.addEventListener('login-success', handleLoginSuccess)
 })
 
