@@ -367,6 +367,8 @@ def get_profit_stats():
                 ts.deposit_fee,
                 ts.prev_avg_cost,
                 ts.current_avg_cost,
+                ts.prev_quantity,
+                ts.current_quantity,
                 (ts.broker_fee + ts.transaction_levy + ts.stamp_duty + ts.trading_fee + ts.deposit_fee) as total_fees,
                 ts.created_at,
                 ltd.last_transaction_date,
