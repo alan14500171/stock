@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  stock-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: stock-backend:latest
+    container_name: stock-backend
+    restart: unless-stopped
+    ports:
+      - "9099:9099"
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
+      - DB_CONNECT_RETRY=5
+      - DB_CONNECT_TIMEOUT=10
+      - DB_CONNECT_RETRY_DELAY=3
+    networks:
+      - stock-network
+    # 添加健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9099/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # 只保留内存限制，移除CPU限制
+    mem_limit: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  stock-network:
+    driver: bridge
+
+# 不再需要volumes和networks配置 
