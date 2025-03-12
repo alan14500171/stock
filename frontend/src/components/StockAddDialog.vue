@@ -19,6 +19,7 @@
                   placeholder="输入股票代码后将自动查询股票信息"
                   @keydown.enter.prevent="handleCodeEnter"
                   @keydown.tab.prevent="handleCodeEnter"
+                  @blur="debouncedHandleCodeBlur"
                   :readonly="!!editData"
                   data-testid="stock-code-input"
                 />
@@ -145,6 +146,9 @@ const form = ref({
   current_price: null
 })
 
+// 添加一个缓存对象来存储已查询过的股票信息
+const stockInfoCache = ref({});
+
 const resetFormExceptCode = () => {
   const currentCode = form.value.code
   form.value = {
@@ -177,13 +181,60 @@ const handleCodeEnter = async (event) => {
     return
   }
   
+  await fetchStockInfo();
+}
+
+// 处理股票代码失去焦点事件
+const handleCodeBlur = async () => {
+  if (!form.value.code || isProcessing.value || !form.value.code.trim()) {
+    return
+  }
+  
+  // 如果已经选择了股票且代码没有变化，不要重新查询
+  if (stockSelected.value && props.editData && form.value.code === props.editData.code) {
+    return;
+  }
+  
+  await fetchStockInfo();
+}
+
+// 使用防抖处理股票代码输入和失去焦点
+const debouncedHandleCodeEnter = debounce(handleCodeEnter, 300)
+const debouncedHandleCodeBlur = debounce(handleCodeBlur, 300)
+
+// 提取股票信息查询逻辑到单独的函数
+const fetchStockInfo = async () => {
+  if (isProcessing.value) return;
+  
+  const stockCode = form.value.code.trim();
+  
+  // 如果缓存中已有该股票信息，直接使用缓存
+  if (stockInfoCache.value[stockCode]) {
+    const cachedData = stockInfoCache.value[stockCode];
+    
+    // 如果缓存显示股票已存在，显示提示信息
+    if (cachedData.exists) {
+      alertMessage.value = '该股票代码已存在';
+      resetFormExceptCode();
+      return;
+    }
+    
+    // 使用缓存数据填充表单
+    form.value.current_price = cachedData.price;
+    form.value.google_code = cachedData.google_code;
+    form.value.code_name = cachedData.code_name;
+    form.value.market = cachedData.market;
+    stockSelected.value = true;
+    return;
+  }
+  
   isProcessing.value = true // 设置处理中状态
   errors.value = {}
   alertMessage.value = ''
   
   try {
     // 查询股票信息
-    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(form.value.code)}&_t=${Date.now()}`)
+    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(stockCode)}&_t=${Date.now()}`)
     
     if (response.data.success && response.data.data.length > 0) {
       const stockData = response.data.data[0]
@@ -192,16 +243,18 @@ const handleCodeEnter = async (event) => {
       // 检查股票是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
-          search: form.value.code,
+          search: stockCode,
           _t: Date.now() // 添加时间戳防止缓存
         }
       })
       
       if (checkResponse.data.success && checkResponse.data.data.items.length > 0) {
         const existingStock = checkResponse.data.data.items.find(
-          stock => stock.code === form.value.code
+          stock => stock.code === stockCode
         )
         if (existingStock) {
+          // 缓存该股票已存在的信息
+          stockInfoCache.value[stockCode] = { exists: true };
           alertMessage.value = '该股票代码已存在'
           resetFormExceptCode()
           return
@@ -213,6 +266,15 @@ const handleCodeEnter = async (event) => {
       form.value.google_code = stockData.query
       form.value.code_name = stockData.code_name || stockData.name || ''
       form.value.market = stockData.market
+      
+      // 缓存查询结果
+      stockInfoCache.value[stockCode] = {
+        exists: false,
+        price: stockData.price,
+        google_code: stockData.query,
+        code_name: stockData.code_name || stockData.name || '',
+        market: stockData.market
+      };
       
       if (form.value.code_name) {
         stockSelected.value = true
@@ -232,15 +294,12 @@ const handleCodeEnter = async (event) => {
   }
 }
 
-// 使用防抖处理股票代码输入
-const debouncedHandleCodeEnter = debounce(handleCodeEnter, 300)
-
 // 监听股票代码变化
-watch(() => form.value.code, (newCode) => {
+watch(() => form.value.code, (newCode, oldCode) => {
   if (!newCode) {
     resetForm()
-  } else if (stockSelected.value) {
-    // 如果已经选择了股票，且代码发生变化，重置选择状态
+  } else if (stockSelected.value && newCode !== oldCode) {
+    // 只有当代码真正变化时才重置选择状态
     stockSelected.value = false
   }
 })
@@ -257,6 +316,8 @@ const resetForm = () => {
   errors.value = {}
   alertMessage.value = ''
   stockSelected.value = false
+  // 清除缓存
+  stockInfoCache.value = {}
 }
 
 // 表单验证

@@ -125,14 +125,14 @@ class TransactionService:
         """处理更新交易记录"""
         # 更新交易记录
         update_sql = """
-            UPDATE stock.stock_transactions 
+            UPDATE stock.stock_transactions
             SET transaction_date = %s,
                 stock_code = %s,
                 market = %s,
                 transaction_type = %s,
                 transaction_code = %s,
-                total_amount = %s,
                 total_quantity = %s,
+                total_amount = %s,
                 broker_fee = %s,
                 transaction_levy = %s,
                 stamp_duty = %s,
@@ -148,9 +148,21 @@ class TransactionService:
                 current_avg_cost = %s,
                 realized_profit = %s,
                 profit_rate = %s,
-                updated_at = NOW()
+                running_quantity = %s,
+                running_cost = %s,
+                updated_at = NOW(),
+                avg_price = %s
             WHERE id = %s AND user_id = %s
         """
+        
+        # 计算平均价格
+        avg_price = 0
+        if float(transaction_data.get('total_quantity', 0) or 0) > 0:
+            avg_price = abs(float(transaction_data.get('total_amount', 0) or 0)) / float(transaction_data.get('total_quantity', 0) or 1)
+        
+        # 设置running_quantity和running_cost为current_quantity和current_cost
+        running_quantity = changes['current_quantity']
+        running_cost = changes['current_cost']
         
         params = [
             transaction_data['transaction_date'],
@@ -158,8 +170,8 @@ class TransactionService:
             transaction_data['market'],
             transaction_data['transaction_type'].lower(),
             transaction_data.get('transaction_code', ''),
-            transaction_data['total_amount'],
             transaction_data['total_quantity'],
+            transaction_data['total_amount'],
             transaction_data.get('broker_fee', 0),
             transaction_data.get('transaction_levy', 0),
             transaction_data.get('stamp_duty', 0),
@@ -175,6 +187,9 @@ class TransactionService:
             changes['current_avg_cost'],
             changes['realized_profit'],
             changes['profit_rate'],
+            running_quantity,
+            running_cost,
+            avg_price,
             transaction_id,
             user_id
         ]
@@ -189,10 +204,17 @@ class TransactionService:
                 with connection.cursor() as cursor:
                     cursor.execute(update_sql, params)
                     
-                    # 先删除原有明细
-                    cursor.execute("DELETE FROM stock.stock_transaction_details WHERE transaction_id = %s", [transaction_id])
+                    if cursor.rowcount == 0:
+                        connection.rollback()
+                        return False, {'message': '更新交易记录失败，记录不存在或无权限'}
                     
-                    # 插入新的明细
+                    # 删除旧的交易明细
+                    cursor.execute(
+                        "DELETE FROM stock.stock_transaction_details WHERE transaction_id = %s",
+                        [transaction_id]
+                    )
+                    
+                    # 添加新的交易明细
                     if 'details' in transaction_data and transaction_data['details']:
                         for detail in transaction_data['details']:
                             detail_sql = """
@@ -213,11 +235,99 @@ class TransactionService:
                     transaction_id
                 )
                 
+                # 更新分单记录
+                try:
+                    # 获取交易记录详情
+                    with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                        # 检查是否有分单记录
+                        check_splits_query = """
+                        SELECT COUNT(*) as split_count FROM transaction_splits 
+                        WHERE original_transaction_id = %s
+                        """
+                        cursor.execute(check_splits_query, (transaction_id,))
+                        result = cursor.fetchone()
+                        has_splits = result and result['split_count'] > 0
+                        
+                        # 如果有分单记录，更新它们
+                        if has_splits:
+                            # 查询交易记录
+                            query = """
+                            SELECT t.*, s.code_name as stock_name 
+                            FROM stock_transactions t
+                            LEFT JOIN stocks s ON t.stock_code = s.code AND t.market = s.market
+                            WHERE t.id = %s
+                            """
+                            cursor.execute(query, (transaction_id,))
+                            transaction = cursor.fetchone()
+                            
+                            if transaction:
+                                # 更新分单记录
+                                update_splits_query = """
+                                UPDATE transaction_splits
+                                SET transaction_date = %s,
+                                    stock_code = %s,
+                                    stock_name = %s,
+                                    market = %s,
+                                    transaction_code = %s,
+                                    transaction_type = %s,
+                                    total_amount = %s,
+                                    total_quantity = %s,
+                                    broker_fee = %s,
+                                    stamp_duty = %s,
+                                    transaction_levy = %s,
+                                    trading_fee = %s,
+                                    deposit_fee = %s,
+                                    total_fees = %s,
+                                    net_amount = %s,
+                                    updated_at = NOW()
+                                WHERE original_transaction_id = %s
+                                """
+                                cursor.execute(update_splits_query, (
+                                    transaction['transaction_date'],
+                                    transaction['stock_code'],
+                                    transaction['stock_name'],
+                                    transaction['market'],
+                                    transaction['transaction_code'],
+                                    transaction['transaction_type'],
+                                    transaction['total_amount'],
+                                    transaction['total_quantity'],
+                                    transaction['broker_fee'],
+                                    transaction['stamp_duty'],
+                                    transaction['transaction_levy'],
+                                    transaction['trading_fee'],
+                                    transaction['deposit_fee'],
+                                    transaction['total_fees'],
+                                    transaction['net_amount'],
+                                    transaction_id
+                                ))
+                                
+                                # 更新交易记录的has_splits标志
+                                update_has_splits_query = """
+                                UPDATE stock_transactions 
+                                SET has_splits = 1, updated_at = NOW()
+                                WHERE id = %s
+                                """
+                                cursor.execute(update_has_splits_query, (transaction_id,))
+                                connection.commit()
+                                
+                                # 重新计算所有分单记录
+                                from utils.transaction_recalculator import recalculate_transaction_splits
+                                recalculate_transaction_splits(
+                                    stock_code=transaction['stock_code'],
+                                    market=transaction['market'],
+                                    transaction_id=transaction_id,
+                                    update_original=True
+                                )
+                except Exception as e:
+                    logger.error(f"更新分单记录失败: {str(e)}")
+                    # 不影响主交易记录的更新，继续执行
+                
                 return True, {'message': '更新交易记录成功', 'changes': changes}
                 
             except Exception as e:
                 # 回滚事务
                 connection.rollback()
+                logger.error(f"更新交易记录失败: {str(e)}")
                 return False, {'message': f'更新交易记录失败: {str(e)}'}
     
     @staticmethod
@@ -232,14 +342,23 @@ class TransactionService:
                 stamp_duty, trading_fee, deposit_fee, total_fees,
                 net_amount, prev_quantity, prev_cost, prev_avg_cost,
                 current_quantity, current_cost, current_avg_cost,
-                realized_profit, profit_rate,
-                created_at, updated_at
+                realized_profit, profit_rate, running_quantity, running_cost,
+                created_at, updated_at, has_splits, avg_price
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, NOW(), NOW()
+                %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s
             )
         """
+        
+        # 计算平均价格
+        avg_price = 0
+        if float(transaction_data.get('total_quantity', 0) or 0) > 0:
+            avg_price = abs(float(transaction_data.get('total_amount', 0) or 0)) / float(transaction_data.get('total_quantity', 0) or 1)
+        
+        # 设置running_quantity和running_cost为current_quantity和current_cost
+        running_quantity = changes['current_quantity']
+        running_cost = changes['current_cost']
         
         params = [
             user_id,
@@ -264,7 +383,11 @@ class TransactionService:
             changes['current_cost'],
             changes['current_avg_cost'],
             changes['realized_profit'],
-            changes['profit_rate']
+            changes['profit_rate'],
+            running_quantity,
+            running_cost,
+            0,  # has_splits初始为0
+            avg_price
         ]
         
         # 使用事务确保主记录和明细记录的一致性
@@ -338,10 +461,11 @@ class TransactionService:
                                     prev_quantity, prev_cost, prev_avg_cost,
                                     current_quantity, current_cost, current_avg_cost,
                                     total_fees, net_amount, running_quantity, running_cost,
-                                    realized_profit, profit_rate, exchange_rate, remarks
+                                    realized_profit, profit_rate, exchange_rate, remarks,
+                                    created_at, updated_at
                                 ) VALUES (
                                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
                                 )
                                 """
                                 
@@ -445,23 +569,25 @@ class TransactionService:
                                     "自动创建的100%分单"
                                 ))
                                 
-                                # 更新交易记录的has_splits标志
+                                # 更新交易记录的has_splits标志和updated_at字段
                                 update_query = """
                                 UPDATE stock_transactions 
-                                SET has_splits = 1 
+                                SET has_splits = 1, updated_at = NOW(),
+                                    running_quantity = %s, running_cost = %s
                                 WHERE id = %s
                                 """
-                                cursor.execute(update_query, (new_id,))
+                                cursor.execute(update_query, (running_quantity, running_cost, new_id))
                                 connection.commit()
                 except Exception as e:
-                    # 记录错误但不影响主交易记录的添加
-                    print(f"自动创建交易分单失败: {str(e)}")
+                    logger.error(f"创建分单记录失败: {str(e)}")
+                    # 不影响主交易记录的创建，继续执行
                 
                 return True, {'message': '添加交易记录成功', 'id': new_id, 'changes': changes}
                 
             except Exception as e:
                 # 回滚事务
                 connection.rollback()
+                logger.error(f"添加交易记录失败: {str(e)}")
                 return False, {'message': f'添加交易记录失败: {str(e)}'}
     
     @staticmethod

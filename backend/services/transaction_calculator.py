@@ -121,6 +121,11 @@ class TransactionCalculator:
                 logger.error("处理交易记录失败: holder_id不能为空")
                 return False, {'message': '处理交易记录失败: holder_id不能为空'}
             
+            # 确保transaction_data中包含user_id，如果没有则使用holder_id
+            if 'user_id' not in transaction_data or not transaction_data['user_id']:
+                transaction_data['user_id'] = holder_id
+                logger.info(f"transaction_data中未找到user_id，使用holder_id: {holder_id}")
+            
             # 验证交易数据（除删除操作外）
             if operation_type != 'delete':
                 logger.info(f"开始验证交易数据: {transaction_data}")
@@ -258,465 +263,612 @@ class TransactionCalculator:
     ) -> Tuple[bool, Dict[str, Any]]:
         """处理新增交易"""
         try:
-            # 确保holder_id不为None
-            if holder_id is None:
-                logger.error("添加交易记录失败: user_id不能为空")
-                return False, {'message': '添加交易记录失败: user_id不能为空'}
+            # 获取用户ID
+            user_id = transaction_data.get('user_id')
+            if not user_id:
+                logger.error("缺少用户ID")
+                return False, {"message": "缺少用户ID"}
             
-            # 记录详细的交易数据和持有人ID，用于调试
-            logger.info(f"开始添加交易记录: holder_id={holder_id}, data={transaction_data}")
-                
-            # 查询表结构，确保SQL语句与表结构匹配
-            try:
-                table_info = db_conn.fetch_all("DESCRIBE stock_transactions")
-                columns = [col['Field'] for col in table_info] if table_info else []
-                logger.info(f"stock_transactions表的列: {columns}")
-            except Exception as e:
-                logger.error(f"获取表结构失败: {str(e)}")
-                columns = []
+            # 获取交易类型
+            transaction_type = transaction_data.get('transaction_type', '').lower()
+            if not transaction_type or transaction_type not in ['buy', 'sell']:
+                logger.error(f"无效的交易类型: {transaction_type}")
+                return False, {"message": f"无效的交易类型: {transaction_type}"}
             
-            # 构建SQL语句，根据实际表结构调整
-            has_transaction_code = 'transaction_code' in columns
-            has_created_at = 'created_at' in columns
+            # 获取交易日期
+            transaction_date = transaction_data.get('transaction_date')
+            if not transaction_date:
+                logger.error("缺少交易日期")
+                return False, {"message": "缺少交易日期"}
             
-            # 构建字段列表和值占位符
-            fields = [
-                "user_id", "transaction_date", "stock_code", "market",
-                "transaction_type", "total_quantity", "total_amount",
-                "broker_fee", "stamp_duty", "transaction_levy",
-                "trading_fee", "deposit_fee", "prev_quantity",
-                "prev_cost", "prev_avg_cost", "current_quantity",
-                "current_cost", "current_avg_cost", "total_fees",
-                "net_amount", "realized_profit", "profit_rate",
-                "avg_price"
-            ]
+            # 获取股票代码和市场
+            stock_code = transaction_data.get('stock_code')
+            market = transaction_data.get('market')
+            if not stock_code or not market:
+                logger.error("缺少股票代码或市场")
+                return False, {"message": "缺少股票代码或市场"}
             
-            # 添加可选字段
-            if has_transaction_code:
-                fields.append("transaction_code")
+            # 获取交易数量和金额
+            total_quantity = float(transaction_data.get('total_quantity', 0) or 0)
+            total_amount = float(transaction_data.get('total_amount', 0) or 0)
+            if total_quantity <= 0:
+                logger.error(f"无效的交易数量: {total_quantity}")
+                return False, {"message": f"无效的交易数量: {total_quantity}"}
             
-            # 始终添加created_at字段，即使表结构检查没有发现它
-            # 这是为了确保即使表结构检查失败，也能尝试设置created_at
-            fields.append("created_at")
-                
-            # 构建参数列表
-            params = [
-                holder_id,  # 使用传入的holder_id作为user_id
-                transaction_data['transaction_date'],
-                transaction_data['stock_code'],
-                transaction_data['market'],
-                transaction_data['transaction_type'],
-                float(transaction_data['total_quantity']),
-                float(transaction_data['total_amount']),
-                float(transaction_data.get('broker_fee', 0)),
-                float(transaction_data.get('stamp_duty', 0)),
-                float(transaction_data.get('transaction_levy', 0)),
-                float(transaction_data.get('trading_fee', 0)),
-                float(transaction_data.get('deposit_fee', 0)),
-                float(position_change['prev_quantity']),
-                float(position_change['prev_cost']),
-                float(position_change['prev_avg_cost']),
-                float(position_change['current_quantity']),
-                float(position_change['current_cost']),
-                float(position_change['current_avg_cost']),
-                float(position_change['total_fees']),
-                float(position_change['net_amount']),
-                float(position_change['realized_profit']),
-                float(position_change['profit_rate']),
-                float(position_change['avg_price'])
-            ]
+            # 计算交易费用
+            broker_fee = float(transaction_data.get('broker_fee', 0) or 0)
+            stamp_duty = float(transaction_data.get('stamp_duty', 0) or 0)
+            transaction_levy = float(transaction_data.get('transaction_levy', 0) or 0)
+            trading_fee = float(transaction_data.get('trading_fee', 0) or 0)
+            deposit_fee = float(transaction_data.get('deposit_fee', 0) or 0)
             
-            # 添加可选参数
-            if has_transaction_code:
-                params.append(transaction_data.get('transaction_code', ''))
+            total_fees = broker_fee + stamp_duty + transaction_levy + trading_fee + deposit_fee
             
-            # 始终添加created_at参数
+            # 计算净金额
+            if transaction_type == 'buy':
+                net_amount = total_amount + total_fees
+            else:  # sell
+                net_amount = total_amount - total_fees
+            
+            # 获取当前时间
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            params.append(current_time)
             
-            # 构建SQL语句
-            placeholders = ", ".join(["%s"] * len(fields))
-            fields_str = ", ".join(fields)
-            insert_sql = f"""
+            # 设置running_quantity和running_cost为current_quantity和current_cost
+            running_quantity = position_change.get('current_quantity', 0)
+            running_cost = position_change.get('current_cost', 0)
+            
+            # 计算平均价格
+            avg_price = 0
+            if total_quantity > 0:
+                avg_price = abs(total_amount) / total_quantity
+            
+            # 构建插入SQL
+            insert_sql = """
                 INSERT INTO stock_transactions (
-                    {fields_str}
+                    user_id, transaction_date, stock_code, market,
+                    transaction_type, transaction_code, total_quantity,
+                    total_amount, broker_fee, transaction_levy,
+                    stamp_duty, trading_fee, deposit_fee,
+                    prev_quantity, prev_cost, prev_avg_cost,
+                    current_quantity, current_cost, current_avg_cost,
+                    realized_profit, profit_rate, running_quantity, running_cost,
+                    created_at, updated_at, has_splits, avg_price, total_fees, net_amount
                 ) VALUES (
-                    {placeholders}
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s
                 )
             """
             
-            # 记录SQL和参数，用于调试
-            logger.info(f"执行SQL: {insert_sql}")
-            logger.info(f"参数: {params}")
+            # 准备参数
+            params = [
+                user_id,
+                transaction_date,
+                stock_code,
+                market,
+                transaction_type,
+                transaction_data.get('transaction_code', ''),
+                total_quantity,
+                total_amount,
+                broker_fee,
+                transaction_levy,
+                stamp_duty,
+                trading_fee,
+                deposit_fee,
+                float(position_change.get('prev_quantity', 0)),
+                float(position_change.get('prev_cost', 0)),
+                float(position_change.get('prev_avg_cost', 0)),
+                float(position_change.get('current_quantity', 0)),
+                float(position_change.get('current_cost', 0)),
+                float(position_change.get('current_avg_cost', 0)),
+                float(position_change.get('realized_profit', 0)),
+                float(position_change.get('profit_rate', 0)),
+                running_quantity,
+                running_cost,
+                current_time,
+                current_time,
+                0,  # has_splits初始为0
+                avg_price,
+                total_fees,  # 添加total_fees
+                net_amount   # 添加net_amount
+            ]
             
-            # 使用execute而不是insert，并手动获取最后插入的ID
-            try:
-                # 执行插入操作
-                db_conn.execute(insert_sql, params)
-                
-                # 获取最后插入的ID
-                result = db_conn.fetch_one("SELECT LAST_INSERT_ID() as id")
-                if not result or 'id' not in result:
-                    logger.error("插入交易记录失败: 无法获取最后插入的ID")
-                    return False, {'message': '插入交易记录失败: 无法获取最后插入的ID'}
-                    
-                transaction_id = result['id']
-                logger.info(f"交易记录插入成功: ID={transaction_id}")
-                
-                # 确保transaction_id不为0
-                if transaction_id == 0:
-                    # 尝试通过transaction_code查询获取真实ID
-                    if 'transaction_code' in transaction_data and transaction_data['transaction_code']:
-                        query = "SELECT id FROM stock_transactions WHERE transaction_code = %s ORDER BY id DESC LIMIT 1"
-                        id_result = db_conn.fetch_one(query, [transaction_data['transaction_code']])
-                        if id_result and 'id' in id_result:
-                            transaction_id = id_result['id']
-                            logger.info(f"通过transaction_code获取到真实ID: {transaction_id}")
-                        else:
-                            logger.error(f"无法通过transaction_code获取真实ID: {transaction_data['transaction_code']}")
-                            return False, {'message': '插入交易记录失败: 无法获取有效的交易ID'}
-                    else:
-                        logger.error("插入交易记录失败: 获取到的ID为0且无法通过transaction_code查询")
-                        return False, {'message': '插入交易记录失败: 获取到的ID为0'}
-                
-                # 插入交易明细
-                if 'details' in transaction_data and transaction_data['details']:
-                    # 查询交易明细表结构
-                    try:
-                        detail_table_info = db_conn.fetch_all("DESCRIBE stock_transaction_details")
-                        detail_columns = [col['Field'] for col in detail_table_info] if detail_table_info else []
-                        logger.info(f"stock_transaction_details表的列: {detail_columns}")
-                    except Exception as e:
-                        logger.error(f"获取交易明细表结构失败: {str(e)}")
-                        detail_columns = []
-                    
-                    # 检查是否有amount字段和created_at字段
-                    has_amount = 'amount' in detail_columns
-                    has_detail_created_at = 'created_at' in detail_columns
-                    
-                    # 构建交易明细SQL
-                    detail_fields = ["transaction_id", "quantity", "price"]
-                    if has_amount:
-                        detail_fields.append("amount")
-                    
-                    # 始终添加created_at字段
-                    detail_fields.append("created_at")
-                    
-                    detail_placeholders = ", ".join(["%s"] * len(detail_fields))
-                    detail_fields_str = ", ".join(detail_fields)
-                    
-                    detail_sql = f"""
-                        INSERT INTO stock_transaction_details (
-                            {detail_fields_str}
-                        ) VALUES (
-                            {detail_placeholders}
-                        )
+            # 执行插入
+            transaction_id = db_conn.insert(insert_sql, params)
+            
+            if not transaction_id:
+                logger.error("插入交易记录失败")
+                return False, {"message": "插入交易记录失败"}
+            
+            logger.info(f"插入交易记录成功，ID: {transaction_id}")
+            
+            # 处理交易明细
+            if 'details' in transaction_data and transaction_data['details']:
+                for detail in transaction_data['details']:
+                    detail_sql = """
+                        INSERT INTO stock_transaction_details
+                        (transaction_id, quantity, price, created_at)
+                        VALUES (%s, %s, %s, %s)
                     """
-                    
-                    detail_success = True
-                    for detail in transaction_data['details']:
-                        quantity = float(detail['quantity'])
-                        price = float(detail['price'])
-                        
-                        detail_params = [transaction_id, quantity, price]
-                        if has_amount:
-                            amount = quantity * price
-                            detail_params.append(amount)
-                        
-                        # 始终添加created_at参数
-                        detail_params.append(current_time)
-                        
-                        logger.info(f"插入交易明细: {detail_params}")
-                        
-                        try:
-                            db_conn.execute(detail_sql, detail_params)
-                        except Exception as e:
-                            logger.error(f"插入交易明细失败: {str(e)}")
-                            detail_success = False
-                            break
-                    
-                    if not detail_success:
-                        logger.error("交易明细插入失败")
-                        return False, {'message': '插入交易明细失败'}
-                    
-                    logger.info(f"交易明细插入成功: 共{len(transaction_data['details'])}条")
+                    detail_params = [
+                        transaction_id,
+                        float(detail.get('quantity', 0)),
+                        float(detail.get('price', 0)),
+                        current_time
+                    ]
+                    db_conn.execute(detail_sql, detail_params)
                 
-                # 自动创建分单记录
-                split_created = False
-                try:
-                    # 确保transaction_data中包含必要的字段
-                    if 'split_ratio' not in transaction_data:
-                        transaction_data['split_ratio'] = 1.0  # 设置默认值为100%
+                logger.info(f"插入交易明细成功，交易ID: {transaction_id}")
+            
+            # 自动创建分单记录
+            try:
+                # 检查是否有持有人
+                if holder_id:
+                    # 获取持有人信息
+                    holder_query = "SELECT id, name FROM holders WHERE id = %s"
+                    holder = db_conn.fetch_one(holder_query, [holder_id])
                     
-                    # 检查是否已存在分单记录
-                    check_split_sql = "SELECT COUNT(*) as count FROM transaction_splits WHERE original_transaction_id = %s"
-                    split_count_result = db_conn.fetch_one(check_split_sql, [transaction_id])
-                    
-                    if split_count_result and split_count_result['count'] > 0:
-                        logger.info(f"已存在分单记录，无需创建: count={split_count_result['count']}")
-                        split_created = True
-                    else:
-                        logger.info("开始创建分单记录")
-                        
+                    if holder:
                         # 获取股票名称
-                        stock_name_sql = """
-                            SELECT code_name FROM stocks 
-                            WHERE code = %s AND market = %s
-                            LIMIT 1
-                        """
-                        stock_params = [
-                            transaction_data['stock_code'],
-                            transaction_data['market']
-                        ]
-                        stock_result = db_conn.fetch_one(stock_name_sql, stock_params)
-                        stock_name = stock_result['code_name'] if stock_result else transaction_data['stock_code']
+                        stock_name = ""
+                        stock_name_query = "SELECT code_name FROM stocks WHERE code = %s AND market = %s"
+                        stock_result = db_conn.fetch_one(stock_name_query, [stock_code, market])
                         
-                        # 获取用户的默认持有人ID
-                        user_id = transaction_data.get('user_id', holder_id)
-                        default_holder_sql = """
-                            SELECT id, name FROM holders
-                            WHERE user_id = %s
-                            LIMIT 1
-                        """
-                        default_holder_result = db_conn.fetch_one(default_holder_sql, [user_id])
-                        
-                        if default_holder_result:
-                            # 使用用户的默认持有人
-                            actual_holder_id = default_holder_result['id']
-                            holder_name = default_holder_result['name']
-                            logger.info(f"使用用户的默认持有人: ID={actual_holder_id}, 名称='{holder_name}'")
+                        if stock_result:
+                            stock_name = stock_result['code_name']
                         else:
-                            # 检查holders表中是否存在该用户ID作为持有人
-                            check_holder_sql = """
-                                SELECT id, name FROM holders
-                                WHERE id = %s
+                            stock_name = stock_code
+                        
+                        # 获取股票ID
+                        stock_id = None
+                        try:
+                            stock_id_sql = """
+                                SELECT id FROM stocks 
+                                WHERE code = %s AND market = %s
                                 LIMIT 1
                             """
-                            holder_result = db_conn.fetch_one(check_holder_sql, [holder_id])
-                            
-                            if holder_result:
-                                actual_holder_id = holder_id
-                                holder_name = holder_result['name']
-                                logger.info(f"使用传入的持有人ID: ID={actual_holder_id}, 名称='{holder_name}'")
+                            stock_id_result = db_conn.fetch_one(stock_id_sql, [stock_code, market])
+                            if stock_id_result:
+                                stock_id = stock_id_result['id']
+                                logger.info(f"获取到股票ID: {stock_id}")
                             else:
-                                # 获取所有持有人，选择第一个
-                                all_holders_sql = """
-                                    SELECT id, name FROM holders
+                                logger.warning(f"未找到股票ID，股票代码: {stock_code}, 市场: {market}")
+                        except Exception as e:
+                            logger.error(f"获取股票ID失败: {str(e)}")
+                        
+                        # 计算running_quantity和running_cost
+                        running_quantity = position_change.get('current_quantity', 0)
+                        running_cost = position_change.get('current_cost', 0)
+                        
+                        # 构建分单记录SQL
+                        split_sql = """
+                            INSERT INTO transaction_splits (
+                                original_transaction_id, holder_id, holder_name, split_ratio,
+                                transaction_date, stock_id, stock_code, stock_name, market,
+                                transaction_code, transaction_type, total_amount, total_quantity,
+                                broker_fee, stamp_duty, transaction_levy, trading_fee, deposit_fee,
+                                prev_quantity, prev_cost, prev_avg_cost,
+                                current_quantity, current_cost, current_avg_cost,
+                                total_fees, net_amount, running_quantity, running_cost,
+                                realized_profit, profit_rate, exchange_rate, remarks,
+                                created_at, updated_at, avg_price
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                        """
+                        
+                        # 准备参数
+                        split_params = [
+                            transaction_id,
+                            holder['id'],
+                            holder['name'],
+                            1.0,  # 100%的分配比例
+                            transaction_date,
+                            stock_id,
+                            stock_code,
+                            stock_name,
+                            market,
+                            transaction_data.get('transaction_code', ''),
+                            transaction_type,
+                            total_amount,
+                            total_quantity,
+                            broker_fee,
+                            stamp_duty,
+                            transaction_levy,
+                            trading_fee,
+                            deposit_fee,
+                            float(position_change.get('prev_quantity', 0)),
+                            float(position_change.get('prev_cost', 0)),
+                            float(position_change.get('prev_avg_cost', 0)),
+                            float(position_change.get('current_quantity', 0)),
+                            float(position_change.get('current_cost', 0)),
+                            float(position_change.get('current_avg_cost', 0)),
+                            total_fees,
+                            net_amount,
+                            running_quantity,
+                            running_cost,
+                            float(position_change.get('realized_profit', 0)),
+                            float(position_change.get('profit_rate', 0)),
+                            transaction_data.get('exchange_rate', 1.0),
+                            "系统自动创建的100%分单",
+                            current_time,
+                            current_time,
+                            avg_price
+                        ]
+                        
+                        # 执行插入
+                        split_id = db_conn.insert(split_sql, split_params)
+                        
+                        if split_id:
+                            logger.info(f"插入分单记录成功，ID: {split_id}")
+                            
+                            # 更新交易记录的has_splits字段
+                            update_has_splits_sql = """
+                            UPDATE stock_transactions 
+                            SET has_splits = 1, updated_at = %s
+                            WHERE id = %s
+                            """
+                            db_conn.execute(update_has_splits_sql, [current_time, transaction_id])
+                            logger.info(f"更新交易记录has_splits字段成功: ID={transaction_id}")
+                        else:
+                            logger.error("插入分单记录失败")
+                    else:
+                        logger.error(f"未找到持有人信息: holder_id={holder_id}")
+                        
+                        # 尝试获取用户的默认持有人
+                        default_holder_query = "SELECT id, name FROM holders WHERE user_id = %s LIMIT 1"
+                        default_holder = db_conn.fetch_one(default_holder_query, [user_id])
+                        
+                        if default_holder:
+                            logger.info(f"找到用户的默认持有人: id={default_holder['id']}, name={default_holder['name']}")
+                            
+                            # 获取股票名称
+                            stock_name = ""
+                            stock_name_query = "SELECT code_name FROM stocks WHERE code = %s AND market = %s"
+                            stock_result = db_conn.fetch_one(stock_name_query, [stock_code, market])
+                            
+                            if stock_result:
+                                stock_name = stock_result['code_name']
+                            else:
+                                stock_name = stock_code
+                            
+                            # 获取股票ID
+                            stock_id = None
+                            try:
+                                stock_id_sql = """
+                                    SELECT id FROM stocks 
+                                    WHERE code = %s AND market = %s
                                     LIMIT 1
                                 """
-                                all_holders_result = db_conn.fetch_one(all_holders_sql)
-                                
-                                if all_holders_result:
-                                    actual_holder_id = all_holders_result['id']
-                                    holder_name = all_holders_result['name']
-                                    logger.info(f"使用系统中的第一个持有人: ID={actual_holder_id}, 名称='{holder_name}'")
+                                stock_id_result = db_conn.fetch_one(stock_id_sql, [stock_code, market])
+                                if stock_id_result:
+                                    stock_id = stock_id_result['id']
+                                    logger.info(f"获取到股票ID: {stock_id}")
                                 else:
-                                    logger.error("系统中没有任何持有人记录，无法创建分单")
-                                    return True, {
-                                        'message': '添加交易记录成功，但无法创建分单（系统中没有持有人记录）',
-                                        'id': transaction_id,
-                                        'position_change': position_change,
-                                        'split_created': False
-                                    }
-                        
-                        # 确保holder_name不为空
-                        if not holder_name:
-                            holder_name = f"持有人ID: {actual_holder_id}"
-                            logger.warning(f"持有人名称为空，使用默认名称: '{holder_name}'")
-                        
-                        logger.info(f"最终使用的持有人ID: {actual_holder_id}, 名称: '{holder_name}'")
-                        
-                        # 检查transaction_splits表是否有holder_name字段
-                        check_column_sql = """
-                            SELECT COUNT(*) as count
-                            FROM information_schema.COLUMNS 
-                            WHERE TABLE_SCHEMA = DATABASE()
-                            AND TABLE_NAME = 'transaction_splits' 
-                            AND COLUMN_NAME = 'holder_name'
-                        """
-                        result = db_conn.fetch_one(check_column_sql)
-                        has_holder_name = result['count'] > 0
-                        
-                        logger.info(f"transaction_splits表是否有holder_name字段: {has_holder_name}")
-                        
-                        # 检查transaction_splits表是否有created_at字段
-                        check_created_at_sql = """
-                            SELECT COUNT(*) as count
-                            FROM information_schema.COLUMNS 
-                            WHERE TABLE_SCHEMA = DATABASE()
-                            AND TABLE_NAME = 'transaction_splits' 
-                            AND COLUMN_NAME = 'created_at'
-                        """
-                        created_at_result = db_conn.fetch_one(check_created_at_sql)
-                        has_created_at = created_at_result['count'] > 0
-                        
-                        logger.info(f"transaction_splits表是否有created_at字段: {has_created_at}")
-                        
-                        # 直接使用SQL插入分单记录
-                        try:
-                            # 构建字段和占位符
-                            fields = [
-                                "original_transaction_id", "holder_id", "split_ratio",
-                                "transaction_date", "stock_code", "market", "stock_name",
-                                "transaction_type", "total_quantity", "total_amount",
-                                "broker_fee", "stamp_duty", "transaction_levy",
-                                "trading_fee", "deposit_fee", "prev_quantity",
-                                "prev_cost", "prev_avg_cost", "current_quantity",
-                                "current_cost", "current_avg_cost", "total_fees",
-                                "net_amount", "realized_profit", "profit_rate",
-                                "avg_price", "transaction_code", "remarks"
-                            ]
+                                    logger.warning(f"未找到股票ID，股票代码: {stock_code}, 市场: {market}")
+                            except Exception as e:
+                                logger.error(f"获取股票ID失败: {str(e)}")
                             
-                            # 添加可选字段
-                            if has_holder_name:
-                                fields.append("holder_name")
-                            if has_created_at:
-                                fields.append("created_at")
+                            # 计算running_quantity和running_cost
+                            running_quantity = position_change.get('current_quantity', 0)
+                            running_cost = position_change.get('current_cost', 0)
                             
-                            # 构建占位符
-                            placeholders = ["%s"] * len(fields)
-                            
-                            # 构建SQL
-                            fields_str = ", ".join(fields)
-                            placeholders_str = ", ".join(placeholders)
-                            
-                            simple_split_sql = f"""
+                            # 构建分单记录SQL
+                            split_sql = """
                                 INSERT INTO transaction_splits (
-                                    {fields_str}
+                                    original_transaction_id, holder_id, holder_name, split_ratio,
+                                    transaction_date, stock_id, stock_code, stock_name, market,
+                                    transaction_code, transaction_type, total_amount, total_quantity,
+                                    broker_fee, stamp_duty, transaction_levy, trading_fee, deposit_fee,
+                                    prev_quantity, prev_cost, prev_avg_cost,
+                                    current_quantity, current_cost, current_avg_cost,
+                                    total_fees, net_amount, running_quantity, running_cost,
+                                    realized_profit, profit_rate, exchange_rate, remarks,
+                                    created_at, updated_at, avg_price
                                 ) VALUES (
-                                    {placeholders_str}
+                                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                                 )
                             """
                             
-                            # 准备基本参数
+                            # 准备参数
                             split_params = [
-                                transaction_id,  # original_transaction_id
-                                actual_holder_id,  # holder_id
-                                1.0,  # split_ratio (100%)
-                                transaction_data['transaction_date'],  # transaction_date
-                                transaction_data['stock_code'],  # stock_code
-                                transaction_data['market'],  # market
-                                stock_name,  # stock_name
-                                transaction_data['transaction_type'],  # transaction_type
-                                float(transaction_data['total_quantity']),  # total_quantity
-                                float(transaction_data['total_amount']),  # total_amount
-                                float(transaction_data.get('broker_fee', 0)),  # broker_fee
-                                float(transaction_data.get('stamp_duty', 0)),  # stamp_duty
-                                float(transaction_data.get('transaction_levy', 0)),  # transaction_levy
-                                float(transaction_data.get('trading_fee', 0)),  # trading_fee
-                                float(transaction_data.get('deposit_fee', 0)),  # deposit_fee
-                                float(position_change['prev_quantity']),  # prev_quantity
-                                float(position_change['prev_cost']),  # prev_cost
-                                float(position_change['prev_avg_cost']),  # prev_avg_cost
-                                float(position_change['current_quantity']),  # current_quantity
-                                float(position_change['current_cost']),  # current_cost
-                                float(position_change['current_avg_cost']),  # current_avg_cost
-                                float(position_change['total_fees']),  # total_fees
-                                float(position_change['net_amount']),  # net_amount
-                                float(position_change['realized_profit']),  # realized_profit
-                                float(position_change['profit_rate']),  # profit_rate
-                                float(position_change['avg_price']),  # avg_price
-                                transaction_data.get('transaction_code', ''),  # transaction_code
-                                transaction_data.get('remarks', '系统自动创建的100%分单') or '系统自动创建的100%分单'  # remarks
+                                transaction_id,
+                                default_holder['id'],
+                                default_holder['name'],
+                                1.0,  # 100%的分配比例
+                                transaction_date,
+                                stock_id,
+                                stock_code,
+                                stock_name,
+                                market,
+                                transaction_data.get('transaction_code', ''),
+                                transaction_type,
+                                total_amount,
+                                total_quantity,
+                                broker_fee,
+                                stamp_duty,
+                                transaction_levy,
+                                trading_fee,
+                                deposit_fee,
+                                float(position_change.get('prev_quantity', 0)),
+                                float(position_change.get('prev_cost', 0)),
+                                float(position_change.get('prev_avg_cost', 0)),
+                                float(position_change.get('current_quantity', 0)),
+                                float(position_change.get('current_cost', 0)),
+                                float(position_change.get('current_avg_cost', 0)),
+                                total_fees,
+                                net_amount,
+                                running_quantity,
+                                running_cost,
+                                float(position_change.get('realized_profit', 0)),
+                                float(position_change.get('profit_rate', 0)),
+                                transaction_data.get('exchange_rate', 1.0),
+                                "系统自动创建的100%分单",
+                                current_time,
+                                current_time,
+                                avg_price
                             ]
                             
-                            # 添加可选参数
-                            if has_holder_name:
-                                split_params.append(holder_name)  # holder_name
-                            if has_created_at:
-                                split_params.append(current_time)  # created_at
+                            # 执行插入
+                            split_id = db_conn.insert(split_sql, split_params)
                             
-                            # 记录SQL语句和参数数量，用于调试
-                            logger.info(f"分单SQL语句中的占位符数量: {simple_split_sql.count('%s')}")
-                            logger.info(f"分单参数列表中的参数数量: {len(split_params)}")
-                            
-                            # 执行SQL插入
-                            db_conn.execute(simple_split_sql, split_params)
-                            logger.info("分单记录插入成功")
-                            split_created = True
-                            
-                            # 更新交易记录的has_splits字段
-                            update_has_splits_sql = "UPDATE stock_transactions SET has_splits = 1 WHERE id = %s"
-                            db_conn.execute(update_has_splits_sql, [transaction_id])
-                            logger.info(f"更新交易记录has_splits字段成功: ID={transaction_id}")
-                        except Exception as split_e:
-                            logger.error(f"直接插入分单记录失败: {str(split_e)}")
-                            logger.error(f"错误详情: {traceback.format_exc()}")
-                            
-                            # 尝试使用更简单的SQL语句
-                            try:
-                                # 构建最小字段集
-                                min_fields = [
-                                    "original_transaction_id", "holder_id", "split_ratio",
-                                    "transaction_date", "stock_code", "market",
-                                    "transaction_type", "total_quantity", "total_amount"
-                                ]
-                                
-                                # 添加可选字段
-                                if has_holder_name:
-                                    min_fields.append("holder_name")
-                                
-                                # 构建占位符
-                                min_placeholders = ["%s"] * len(min_fields)
-                                
-                                # 构建SQL
-                                min_fields_str = ", ".join(min_fields)
-                                min_placeholders_str = ", ".join(min_placeholders)
-                                
-                                very_simple_split_sql = f"""
-                                    INSERT INTO transaction_splits (
-                                        {min_fields_str}
-                                    ) VALUES (
-                                        {min_placeholders_str}
-                                    )
-                                """
-                                
-                                # 准备最小参数集
-                                very_simple_params = [
-                                    transaction_id,
-                                    actual_holder_id,
-                                    1.0,
-                                    transaction_data['transaction_date'],
-                                    transaction_data['stock_code'],
-                                    transaction_data['market'],
-                                    transaction_data['transaction_type'],
-                                    float(transaction_data['total_quantity']),
-                                    float(transaction_data['total_amount'])
-                                ]
-                                
-                                # 添加可选参数
-                                if has_holder_name:
-                                    very_simple_params.append(holder_name)
-                                
-                                db_conn.execute(very_simple_split_sql, very_simple_params)
-                                logger.info("简化版分单记录插入成功")
-                                split_created = True
+                            if split_id:
+                                logger.info(f"使用默认持有人插入分单记录成功，ID: {split_id}")
                                 
                                 # 更新交易记录的has_splits字段
-                                db_conn.execute(update_has_splits_sql, [transaction_id])
-                            except Exception as very_simple_e:
-                                logger.error(f"简化版分单记录插入失败: {str(very_simple_e)}")
-                except Exception as e:
-                    logger.error(f"创建分单记录失败: {str(e)}")
-                    logger.error(f"错误详情: {traceback.format_exc()}")
-                
-                # 返回成功结果
-                return True, {
-                    'message': '添加交易记录成功',
-                    'id': transaction_id,
-                    'position_change': position_change,
-                    'split_created': split_created
-                }
-                
+                                update_has_splits_sql = """
+                                UPDATE stock_transactions 
+                                SET has_splits = 1, updated_at = %s
+                                WHERE id = %s
+                                """
+                                db_conn.execute(update_has_splits_sql, [current_time, transaction_id])
+                                logger.info(f"更新交易记录has_splits字段成功: ID={transaction_id}")
+                            else:
+                                logger.error("使用默认持有人插入分单记录失败")
+                        else:
+                            logger.error(f"未找到用户的默认持有人: user_id={user_id}")
+                else:
+                    # 如果没有提供holder_id，尝试获取用户的默认持有人
+                    default_holder_query = "SELECT id, name FROM holders WHERE user_id = %s LIMIT 1"
+                    default_holder = db_conn.fetch_one(default_holder_query, [user_id])
+                    
+                    if default_holder:
+                        logger.info(f"找到用户的默认持有人: id={default_holder['id']}, name={default_holder['name']}")
+                        
+                        # 获取股票名称
+                        stock_name = ""
+                        stock_name_query = "SELECT code_name FROM stocks WHERE code = %s AND market = %s"
+                        stock_result = db_conn.fetch_one(stock_name_query, [stock_code, market])
+                        
+                        if stock_result:
+                            stock_name = stock_result['code_name']
+                        else:
+                            stock_name = stock_code
+                        
+                        # 获取股票ID
+                        stock_id = None
+                        try:
+                            stock_id_sql = """
+                                SELECT id FROM stocks 
+                                WHERE code = %s AND market = %s
+                                LIMIT 1
+                            """
+                            stock_id_result = db_conn.fetch_one(stock_id_sql, [stock_code, market])
+                            if stock_id_result:
+                                stock_id = stock_id_result['id']
+                                logger.info(f"获取到股票ID: {stock_id}")
+                            else:
+                                logger.warning(f"未找到股票ID，股票代码: {stock_code}, 市场: {market}")
+                        except Exception as e:
+                            logger.error(f"获取股票ID失败: {str(e)}")
+                        
+                        # 计算running_quantity和running_cost
+                        running_quantity = position_change.get('current_quantity', 0)
+                        running_cost = position_change.get('current_cost', 0)
+                        
+                        # 构建分单记录SQL
+                        split_sql = """
+                            INSERT INTO transaction_splits (
+                                original_transaction_id, holder_id, holder_name, split_ratio,
+                                transaction_date, stock_id, stock_code, stock_name, market,
+                                transaction_code, transaction_type, total_amount, total_quantity,
+                                broker_fee, stamp_duty, transaction_levy, trading_fee, deposit_fee,
+                                prev_quantity, prev_cost, prev_avg_cost,
+                                current_quantity, current_cost, current_avg_cost,
+                                total_fees, net_amount, running_quantity, running_cost,
+                                realized_profit, profit_rate, exchange_rate, remarks,
+                                created_at, updated_at, avg_price
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                        """
+                        
+                        # 准备参数
+                        split_params = [
+                            transaction_id,
+                            default_holder['id'],
+                            default_holder['name'],
+                            1.0,  # 100%的分配比例
+                            transaction_date,
+                            stock_id,
+                            stock_code,
+                            stock_name,
+                            market,
+                            transaction_data.get('transaction_code', ''),
+                            transaction_type,
+                            total_amount,
+                            total_quantity,
+                            broker_fee,
+                            stamp_duty,
+                            transaction_levy,
+                            trading_fee,
+                            deposit_fee,
+                            float(position_change.get('prev_quantity', 0)),
+                            float(position_change.get('prev_cost', 0)),
+                            float(position_change.get('prev_avg_cost', 0)),
+                            float(position_change.get('current_quantity', 0)),
+                            float(position_change.get('current_cost', 0)),
+                            float(position_change.get('current_avg_cost', 0)),
+                            total_fees,
+                            net_amount,
+                            running_quantity,
+                            running_cost,
+                            float(position_change.get('realized_profit', 0)),
+                            float(position_change.get('profit_rate', 0)),
+                            transaction_data.get('exchange_rate', 1.0),
+                            "系统自动创建的100%分单",
+                            current_time,
+                            current_time,
+                            avg_price
+                        ]
+                        
+                        # 执行插入
+                        split_id = db_conn.insert(split_sql, split_params)
+                        
+                        if split_id:
+                            logger.info(f"使用默认持有人插入分单记录成功，ID: {split_id}")
+                            
+                            # 更新交易记录的has_splits字段
+                            update_has_splits_sql = """
+                            UPDATE stock_transactions 
+                            SET has_splits = 1, updated_at = %s
+                            WHERE id = %s
+                            """
+                            db_conn.execute(update_has_splits_sql, [current_time, transaction_id])
+                            logger.info(f"更新交易记录has_splits字段成功: ID={transaction_id}")
+                        else:
+                            logger.error("使用默认持有人插入分单记录失败")
+                    else:
+                        logger.error(f"未找到用户的默认持有人: user_id={user_id}")
+                        
+                    # 尝试获取任意持有人
+                    any_holder_query = "SELECT id, name FROM holders LIMIT 1"
+                    any_holder = db_conn.fetch_one(any_holder_query)
+                    
+                    if any_holder:
+                        logger.info(f"找到系统中的任意持有人: id={any_holder['id']}, name={any_holder['name']}")
+                        
+                        # 获取股票名称
+                        stock_name = ""
+                        stock_name_query = "SELECT code_name FROM stocks WHERE code = %s AND market = %s"
+                        stock_result = db_conn.fetch_one(stock_name_query, [stock_code, market])
+                        
+                        if stock_result:
+                            stock_name = stock_result['code_name']
+                        else:
+                            stock_name = stock_code
+                        
+                        # 获取股票ID
+                        stock_id = None
+                        try:
+                            stock_id_sql = """
+                                SELECT id FROM stocks 
+                                WHERE code = %s AND market = %s
+                                LIMIT 1
+                            """
+                            stock_id_result = db_conn.fetch_one(stock_id_sql, [stock_code, market])
+                            if stock_id_result:
+                                stock_id = stock_id_result['id']
+                                logger.info(f"获取到股票ID: {stock_id}")
+                            else:
+                                logger.warning(f"未找到股票ID，股票代码: {stock_code}, 市场: {market}")
+                        except Exception as e:
+                            logger.error(f"获取股票ID失败: {str(e)}")
+                        
+                        # 计算running_quantity和running_cost
+                        running_quantity = position_change.get('current_quantity', 0)
+                        running_cost = position_change.get('current_cost', 0)
+                        
+                        # 构建分单记录SQL
+                        split_sql = """
+                            INSERT INTO transaction_splits (
+                                original_transaction_id, holder_id, holder_name, split_ratio,
+                                transaction_date, stock_id, stock_code, stock_name, market,
+                                transaction_code, transaction_type, total_amount, total_quantity,
+                                broker_fee, stamp_duty, transaction_levy, trading_fee, deposit_fee,
+                                prev_quantity, prev_cost, prev_avg_cost,
+                                current_quantity, current_cost, current_avg_cost,
+                                total_fees, net_amount, running_quantity, running_cost,
+                                realized_profit, profit_rate, exchange_rate, remarks,
+                                created_at, updated_at, avg_price
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                        """
+                        
+                        # 准备参数
+                        split_params = [
+                            transaction_id,
+                            any_holder['id'],
+                            any_holder['name'],
+                            1.0,  # 100%的分配比例
+                            transaction_date,
+                            stock_id,
+                            stock_code,
+                            stock_name,
+                            market,
+                            transaction_data.get('transaction_code', ''),
+                            transaction_type,
+                            total_amount,
+                            total_quantity,
+                            broker_fee,
+                            stamp_duty,
+                            transaction_levy,
+                            trading_fee,
+                            deposit_fee,
+                            float(position_change.get('prev_quantity', 0)),
+                            float(position_change.get('prev_cost', 0)),
+                            float(position_change.get('prev_avg_cost', 0)),
+                            float(position_change.get('current_quantity', 0)),
+                            float(position_change.get('current_cost', 0)),
+                            float(position_change.get('current_avg_cost', 0)),
+                            total_fees,
+                            net_amount,
+                            running_quantity,
+                            running_cost,
+                            float(position_change.get('realized_profit', 0)),
+                            float(position_change.get('profit_rate', 0)),
+                            transaction_data.get('exchange_rate', 1.0),
+                            "系统自动创建的100%分单",
+                            current_time,
+                            current_time,
+                            avg_price
+                        ]
+                        
+                        # 执行插入
+                        split_id = db_conn.insert(split_sql, split_params)
+                        
+                        if split_id:
+                            logger.info(f"使用系统中的任意持有人插入分单记录成功，ID: {split_id}")
+                            
+                            # 更新交易记录的has_splits字段
+                            update_has_splits_sql = """
+                            UPDATE stock_transactions 
+                            SET has_splits = 1, updated_at = %s
+                            WHERE id = %s
+                            """
+                            db_conn.execute(update_has_splits_sql, [current_time, transaction_id])
+                            logger.info(f"更新交易记录has_splits字段成功: ID={transaction_id}")
+                        else:
+                            logger.error("使用系统中的任意持有人插入分单记录失败")
+                    else:
+                        logger.error("系统中没有任何持有人记录，无法创建分单")
             except Exception as e:
-                logger.error(f"插入交易记录失败: {str(e)}")
-                return False, {'message': f'插入交易记录失败: {str(e)}'}
-                
+                logger.error(f"创建分单记录失败: {str(e)}")
+                # 不影响主交易记录的创建，继续执行
+            
+            return True, {
+                "message": "添加交易记录成功",
+                "id": transaction_id,
+                "changes": position_change
+            }
         except Exception as e:
-            logger.error(f"处理新增交易失败: {str(e)}")
-            import traceback
-            logger.error(f"错误详情: {traceback.format_exc()}")
-            return False, {'message': f'处理新增交易失败: {str(e)}'}
+            logger.error(f"添加交易记录失败: {str(e)}")
+            return False, {"message": f"添加交易记录失败: {str(e)}"}
 
     @staticmethod
     def _handle_edit(
@@ -961,8 +1113,11 @@ class TransactionCalculator:
                     float(transaction_data.get('deposit_fee', 0) or 0)
                 ])
                 
-                # 计算净额
-                net_amount = float(transaction_data.get('total_amount', 0) or 0) + total_fees
+                # 计算净额 - 修改逻辑，不使用负号
+                if transaction_data['transaction_type'].lower() == 'buy':
+                    net_amount = float(transaction_data.get('total_amount', 0) or 0) + total_fees
+                else:  # sell
+                    net_amount = float(transaction_data.get('total_amount', 0) or 0) - total_fees
                 
                 # 计算平均价格
                 avg_price = 0
@@ -1007,12 +1162,9 @@ class TransactionCalculator:
                     position_change.get('current_avg_cost', 0),
                     total_fees,
                     net_amount,
-                    position_change.get('realized_profit', 0),
-                    position_change.get('profit_rate', 0),
-                    avg_price,
-                    stock_id,
                     running_quantity,
                     running_cost,
+                    stock_id,
                     existing_split['id']
                 ]
                 
@@ -1101,8 +1253,11 @@ class TransactionCalculator:
                 float(transaction_data.get('deposit_fee', 0) or 0)
             ])
             
-            # 计算净额
-            net_amount = float(transaction_data.get('total_amount', 0) or 0) + total_fees
+            # 计算净额 - 修改逻辑，不使用负号
+            if transaction_data['transaction_type'].lower() == 'buy':
+                net_amount = float(transaction_data.get('total_amount', 0) or 0) + total_fees
+            else:  # sell
+                net_amount = float(transaction_data.get('total_amount', 0) or 0) - total_fees
             
             # 计算平均价格
             avg_price = 0
@@ -1136,7 +1291,7 @@ class TransactionCalculator:
                 holder_name,  # holder_name
                 split_ratio,  # split_ratio
                 transaction_data['transaction_date'],  # transaction_date
-                transaction_data['stock_code'],  # stock_code
+                stock_id,  # stock_id
                 transaction_data['market'],  # market
                 stock_name,  # stock_name
                 transaction_data['transaction_type'],  # transaction_type
