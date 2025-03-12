@@ -207,7 +207,7 @@
                       </td>
                       <td>
                         {{ stock.code }}
-                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
+                        <span class="company-name" style="display: inline-block; width: 80px; white-space: normal; font-size: 10px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
                       </td>
                       <td class="text-end">{{ formatNumber(stock.current_quantity, 0) }}</td>
                       <td class="text-end">{{ stock.transaction_count }}</td>
@@ -328,7 +328,7 @@
                       </td>
                       <td>
                         {{ stock.code }}
-                        <span class="company-name" style="display: inline-block; font-size: 14px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
+                        <span class="company-name" style="display: inline-block; width: 80px; white-space: normal; font-size: 10px; color: #6c757d; margin-left: 4px;">{{ stock.stock_name }}</span>
                       </td>
                       <td class="text-end">{{ stock.quantity || '-' }}</td>
                       <td class="text-end">{{ stock.transaction_count }}</td>
@@ -1490,7 +1490,7 @@ onMounted(() => {
 }
 
 .company-name {
-  display: block;
+  display: inline-block;
   font-size: 14px;
   color: #64a7e3;
   margin-top: 2px;
