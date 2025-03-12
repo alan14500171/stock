@@ -640,102 +640,146 @@ def refresh_stock_prices():
         sql = main_sql
         
         logger.info(f"查询用户 {user_id} 的持仓股票")
-        logger.info(f"执行SQL: {sql}")
-        logger.info(f"参数: {params}")
-        stocks = db.fetch_all(sql, params)
-        logger.info(f"查询到 {len(stocks)} 条持仓记录")
+        logger.debug(f"执行SQL: {sql}")
+        logger.debug(f"参数: {params}")
+        
+        try:
+            stocks = db.fetch_all(sql, params)
+            logger.info(f"查询到 {len(stocks)} 条持仓记录")
+        except Exception as db_error:
+            logger.error(f"查询持仓股票失败: {str(db_error)}")
+            return jsonify({
+                'success': False,
+                'message': f'查询持仓股票失败: {str(db_error)}'
+            }), 500
+        
+        if not stocks:
+            logger.info("没有查询到持仓股票记录")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'items': [],
+                    'success_count': 0,
+                    'failed_count': 0,
+                    'message': '没有查询到持仓股票记录'
+                }
+            })
         
         results = []
         success_count = 0
         failed_count = 0
         
+        # 处理每只股票
         for stock in stocks:
-            quantity = float(stock['quantity'])
-            total_buy = float(stock['total_buy'])
-            total_sell = float(stock['total_sell'])
-            total_fees = float(stock['total_fees'])
-            last_buy_avg_cost = float(stock['last_buy_avg_cost'] or 0)
-            
-            logger.info(f"处理股票: {stock['market']}-{stock['code']} ({stock['stock_name']})")
-            logger.info(f"持仓数量: {quantity}, 买入总额: {total_buy}, 卖出总额: {total_sell}, 总费用: {total_fees}")
-            
             try:
+                quantity = float(stock['quantity'])
+                total_buy = float(stock['total_buy'])
+                total_sell = float(stock['total_sell'])
+                total_fees = float(stock['total_fees'])
+                last_buy_avg_cost = float(stock['last_buy_avg_cost'] or 0)
+                
+                logger.info(f"处理股票: {stock['market']}-{stock['code']} ({stock['stock_name']})")
+                logger.info(f"持仓数量: {quantity}, 买入总额: {total_buy}, 卖出总额: {total_sell}, 总费用: {total_fees}")
+                
                 # 获取当前股价
                 query = stock['google_name']
+                if not query:
+                    logger.warning(f"股票 {stock['market']}-{stock['code']} 缺少Google名称，无法查询价格")
+                    # 尝试构建一个默认的查询字符串
+                    market_code = 'HKG' if stock['market'] == 'HK' else stock['market']
+                    query = f"{stock['code']}:{market_code}"
+                    logger.info(f"使用默认查询字符串: {query}")
+                
                 logger.info(f"查询股价: {query}")
-                price_result = checker.get_stock_price(query)
-                logger.info(f"获取到的股价: {price_result}")
+                try:
+                    price_result = checker.get_stock_price(query)
+                    logger.info(f"获取到的股价: {price_result}")
+                except Exception as price_error:
+                    logger.error(f"获取股价异常: {str(price_error)}")
+                    price_result = None
                 
                 if price_result is not None:
-                    current_price = float(price_result)
-                    # 计算市值
-                    market_value = current_price * quantity
-                    logger.info(f"当前价格: {current_price}, 市值: {market_value}")
-                    
-                    # 使用最后一次买入的移动加权平均价格作为平均成本
-                    avg_cost = last_buy_avg_cost
-                    logger.info(f"移动加权平均成本: {avg_cost}")
-                    
-                    # 计算持仓盈亏
-                    holding_profit = (current_price - avg_cost) * quantity
-                    logger.info(f"持仓盈亏: {holding_profit}")
-                    
-                    # 获取已实现盈亏
-                    realized_profit_sql = """
-                        SELECT 
-                            SUM(
-                                CASE 
-                                    WHEN UPPER(ts.transaction_type) = 'SELL' THEN 
-                                        ts.total_amount - (ts.total_quantity * ts.prev_avg_cost) - 
-                                        (ts.broker_fee + ts.transaction_levy + ts.stamp_duty + ts.trading_fee + ts.deposit_fee)
-                                    ELSE 0 
-                                END
-                            ) as total_realized_profit
-                        FROM stock.transaction_splits ts
-                        JOIN stock.stock_transactions t ON ts.original_transaction_id = t.id
-                        WHERE t.user_id = %s 
-                          AND ts.stock_code = %s 
-                          AND ts.market = %s
-                    """
-                    
-                    realized_params = [user_id, stock['code'], stock['market']]
-                    if holder_id:
-                        realized_profit_sql += " AND ts.holder_id = %s"
-                        realized_params.append(holder_id)
-                    
-                    realized_profit_record = db.fetch_one(realized_profit_sql, realized_params)
-                    realized_profit = float(realized_profit_record['total_realized_profit'] or 0) if realized_profit_record else 0
-                    logger.info(f"已实现盈亏: {realized_profit}")
-                    
-                    # 计算总盈亏
-                    total_profit = holding_profit + realized_profit
-                    logger.info(f"总盈亏: {total_profit}")
-                    
-                    # 计算盈亏率
-                    profit_rate = (total_profit / total_buy * 100) if total_buy > 0 else 0
-                    logger.info(f"盈亏率: {profit_rate}%")
-                    
-                    results.append({
-                        'market': stock['market'],
-                        'code': stock['code'],
-                        'name': stock['stock_name'],
-                        'current_price': current_price,
-                        'quantity': quantity,
-                        'market_value': market_value,
-                        'avg_cost': avg_cost,
-                        'holding_profit': holding_profit,
-                        'realized_profit': realized_profit,
-                        'total_profit': total_profit,
-                        'profit_rate': profit_rate
-                    })
-                    success_count += 1
-                    logger.info(f"股票 {stock['market']}-{stock['code']} 处理成功")
+                    try:
+                        current_price = float(price_result)
+                        # 计算市值
+                        market_value = current_price * quantity
+                        logger.info(f"当前价格: {current_price}, 市值: {market_value}")
+                        
+                        # 使用最后一次买入的移动加权平均价格作为平均成本
+                        avg_cost = last_buy_avg_cost
+                        logger.info(f"移动加权平均成本: {avg_cost}")
+                        
+                        # 计算持仓盈亏
+                        holding_profit = (current_price - avg_cost) * quantity
+                        logger.info(f"持仓盈亏: {holding_profit}")
+                        
+                        # 获取已实现盈亏
+                        realized_profit_sql = """
+                            SELECT 
+                                SUM(
+                                    CASE 
+                                        WHEN UPPER(ts.transaction_type) = 'SELL' THEN 
+                                            ts.total_amount - (ts.total_quantity * ts.prev_avg_cost) - 
+                                            (ts.broker_fee + ts.transaction_levy + ts.stamp_duty + ts.trading_fee + ts.deposit_fee)
+                                        ELSE 0 
+                                    END
+                                ) as total_realized_profit
+                            FROM stock.transaction_splits ts
+                            JOIN stock.stock_transactions t ON ts.original_transaction_id = t.id
+                            WHERE t.user_id = %s 
+                              AND ts.stock_code = %s 
+                              AND ts.market = %s
+                        """
+                        
+                        realized_params = [user_id, stock['code'], stock['market']]
+                        if holder_id:
+                            realized_profit_sql += " AND ts.holder_id = %s"
+                            realized_params.append(holder_id)
+                        
+                        try:
+                            realized_profit_record = db.fetch_one(realized_profit_sql, realized_params)
+                            realized_profit = float(realized_profit_record['total_realized_profit'] or 0) if realized_profit_record else 0
+                            logger.info(f"已实现盈亏: {realized_profit}")
+                        except Exception as rp_error:
+                            logger.error(f"获取已实现盈亏失败: {str(rp_error)}")
+                            realized_profit = 0
+                        
+                        # 计算总盈亏
+                        total_profit = holding_profit + realized_profit
+                        logger.info(f"总盈亏: {total_profit}")
+                        
+                        # 计算盈亏率
+                        profit_rate = (total_profit / total_buy * 100) if total_buy > 0 else 0
+                        logger.info(f"盈亏率: {profit_rate}%")
+                        
+                        # 添加到结果
+                        results.append({
+                            'market': stock['market'],
+                            'code': stock['code'],
+                            'name': stock['stock_name'],
+                            'current_price': current_price,
+                            'quantity': quantity,
+                            'market_value': market_value,
+                            'avg_cost': avg_cost,
+                            'holding_profit': holding_profit,
+                            'realized_profit': realized_profit,
+                            'total_profit': total_profit,
+                            'profit_rate': profit_rate
+                        })
+                        success_count += 1
+                        logger.info(f"股票 {stock['market']}-{stock['code']} 处理成功")
+                    except Exception as calc_error:
+                        failed_count += 1
+                        logger.error(f"计算股票 {stock['market']}-{stock['code']} 盈亏数据失败: {str(calc_error)}")
                 else:
                     failed_count += 1
                     logger.error(f"获取股价失败 {stock['market']}:{stock['code']}: 未获取到价格")
             except Exception as e:
                 failed_count += 1
-                logger.error(f"获取股价失败 {stock['market']}:{stock['code']}: {str(e)}")
+                logger.error(f"处理股票 {stock.get('market', '未知')}:{stock.get('code', '未知')} 失败: {str(e)}")
+        
+        # 排序结果，按市场和代码
+        results.sort(key=lambda x: (x['market'], x['code']))
         
         logger.info(f"股价刷新完成: {success_count} 个成功, {failed_count} 个失败")
         return jsonify({
@@ -747,8 +791,8 @@ def refresh_stock_prices():
             }
         })
     except Exception as e:
-        logger.error(f"刷新股价失败: {str(e)}")
+        logger.error(f"刷新股价失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': '刷新股价失败'
+            'message': f'刷新股价失败: {str(e)}'
         }), 500 

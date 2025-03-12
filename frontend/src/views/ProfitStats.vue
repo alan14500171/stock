@@ -854,34 +854,57 @@ const refreshMarketValue = async () => {
   refreshLoading.value = true
   try {
     console.log('开始刷新市值...')
+    
+    // 显示开始刷新的提示
+    showToast('正在刷新市值，请稍等...')
+    
+    // 发起请求
     const response = await axios.post('/api/profit/refresh_prices')
     console.log('收到后端响应:', response.data)
     
     if (response.data.success) {
       const { items, success_count, failed_count } = response.data.data
       
-      // 更新持仓股票的现价和相关数据
-      items.forEach(item => {
-        const stockKey = `${item.market}-${item.code}`
-        if (stockStats.value[stockKey]) {
-          console.log(`更新股票 ${stockKey} 数据:`, item)
-          stockStats.value[stockKey].current_price = item.current_price
-          stockStats.value[stockKey].market_value = item.market_value
-          stockStats.value[stockKey].holding_profit = item.holding_profit
-          stockStats.value[stockKey].total_profit = item.total_profit
-          stockStats.value[stockKey].profit_rate = item.profit_rate
-        }
-      })
-      
-      // 重新计算市场统计
-      rawMarketStats.value = statsCalculator.calculateMarketStats(stockStats.value, searchForm.stockCodes || [])
-      
-      // 显示更新结果
-      showToast(`市值更新完成：${success_count} 个成功，${failed_count} 个失败`)
+      if (items && items.length > 0) {
+        console.log(`共刷新了 ${items.length} 只股票的价格`)
+        
+        // 更新持仓股票的现价和相关数据
+        items.forEach(item => {
+          const stockKey = `${item.market}-${item.code}`
+          if (stockStats.value[stockKey]) {
+            console.log(`更新股票 ${stockKey} 数据:`, item)
+            stockStats.value[stockKey].current_price = item.current_price
+            stockStats.value[stockKey].market_value = item.market_value
+            stockStats.value[stockKey].holding_profit = item.holding_profit
+            stockStats.value[stockKey].total_profit = item.total_profit
+            stockStats.value[stockKey].profit_rate = item.profit_rate
+          } else {
+            console.warn(`未找到股票 ${stockKey} 的数据`)
+          }
+        })
+        
+        // 重新计算市场统计
+        console.log('重新计算市场统计数据')
+        // 创建stockStats的副本以触发重新计算
+        const updatedStockStats = JSON.parse(JSON.stringify(stockStats.value))
+        stockStats.value = updatedStockStats
+        
+        // 显示更新结果
+        showToast(`市值刷新完成：${success_count} 个成功，${failed_count} 个失败`)
+      } else {
+        // 没有股票被刷新
+        showToast(response.data.data.message || '没有持仓股票需要刷新')
+      }
+    } else {
+      // 处理失败情况
+      console.error('刷新市值失败:', response.data.message)
+      showToast(`刷新市值失败: ${response.data.message || '未知错误'}`)
     }
   } catch (error) {
-    console.error('刷新市值失败:', error)
-    showToast('刷新市值失败，请稍后重试')
+    // 处理请求异常
+    console.error('刷新市值请求失败:', error)
+    const errorMessage = error.response?.data?.message || error.message || '请求失败'
+    showToast(`刷新市值失败：${errorMessage}`)
   } finally {
     refreshLoading.value = false
   }

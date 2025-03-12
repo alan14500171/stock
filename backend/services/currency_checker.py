@@ -78,29 +78,74 @@ class CurrencyChecker:
         :return: 股票价格或 None
         """
         try:
+            if not query:
+                logger.error('查询字符串为空')
+                return None
+            
+            # 日志请求详情
+            logger.info(f'正在查询股票价格: {query}')
+            
+            # 添加时间戳防止缓存
             timestamp = int(datetime.now().timestamp() * 1000)
             url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
             
+            # 增强请求头，添加缓存控制
             headers = CurrencyChecker.HEADERS.copy()
             headers.update({
-                'Cache-Control': 'no-cache',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
-                'If-None-Match': '',
-                'If-Modified-Since': ''
+                'Expires': '0',
+                'If-None-Match': '*',
+                'If-Modified-Since': '0'
             })
             
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+            logger.info(f'请求URL: {url}')
+            
+            # 增加超时时间和重试
+            for retry in range(3):
+                try:
+                    response = requests.get(url, headers=headers, timeout=15)
+                    response.raise_for_status()
+                    break
+                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                    if retry < 2:  # 如果不是最后一次重试
+                        logger.warning(f'查询股票 {query} 超时或连接错误，正在重试 ({retry+1}/3): {str(e)}')
+                        continue
+                    else:
+                        raise  # 最后一次重试仍失败，抛出异常
+            
+            # 检查响应内容
+            if not response.text:
+                logger.error(f'查询股票 {query} 返回空响应')
+                return None
             
             soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 检查是否有价格元素
+            if not CurrencyChecker._check_price_exists(soup):
+                logger.warning(f'查询股票 {query} 未找到价格元素')
+                # 保存响应内容以便调试
+                logger.debug(f'响应内容: {response.text[:500]}...')
+                return None
+            
+            # 提取价格
             result = CurrencyChecker._extract_price(soup)
             
-            if result and result['price']:
+            if result and result.get('price'):
+                logger.info(f'成功获取股票 {query} 的价格: {result["price"]}')
                 return result['price']
+            
+            logger.warning(f'股票 {query} 提取价格失败')
             return None
             
+        except requests.exceptions.HTTPError as e:
+            logger.error(f'查询股票 {query} HTTP错误: {str(e)}, 状态码: {e.response.status_code if hasattr(e, "response") else "未知"}')
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f'查询股票 {query} 请求异常: {str(e)}')
+            return None
         except Exception as e:
-            logger.error(f'获取股票 {query} 价格失败: {str(e)}')
+            logger.error(f'获取股票 {query} 价格失败: {str(e)}', exc_info=True)
             return None
 
     @staticmethod
