@@ -27,8 +27,19 @@ class TransactionCalculator:
             return total_amount - total_fees
 
     @staticmethod
-    def calculate_position_change(transaction, prev_state):
-        """计算持仓变化"""
+    def calculate_position_change(transaction, prev_state, is_split=False, skip_validation=False):
+        """
+        计算持仓变化
+        
+        Args:
+            transaction: 交易数据
+            prev_state: 之前的状态
+            is_split: 是否为分单操作
+            skip_validation: 是否跳过验证（添加交易记录时设为True）
+            
+        Returns:
+            Dict: 计算结果
+        """
         total_quantity = Decimal(str(transaction['total_quantity']))
         total_amount = Decimal(str(transaction['total_amount']))
         total_fees = TransactionCalculator.calculate_fees(transaction)
@@ -66,7 +77,8 @@ class TransactionCalculator:
                                         if result['current_quantity'] > 0 else Decimal('0'))
         else:
             # 卖出
-            if prev_quantity < total_quantity:
+            # 在添加交易记录时跳过验证，在分单操作时进行验证
+            if prev_quantity < total_quantity and not skip_validation and not is_split:
                 raise ValueError(f'卖出数量({total_quantity})大于持仓数量({prev_quantity})')
             
             result['current_quantity'] = prev_quantity - total_quantity
@@ -140,14 +152,20 @@ class TransactionCalculator:
                 # 获取之前的持仓状态
                 prev_state = TransactionCalculator._get_previous_holding_state(
                     db_conn,
-                    holder_id,
+                    transaction_data['user_id'],  # 使用user_id而不是holder_id
                     transaction_data['stock_code'],
                     transaction_data['market'],
                     transaction_data['transaction_date']
                 )
                 
-                # 计算持仓变化
-                position_change = TransactionCalculator.calculate_position_change(transaction_data, prev_state)
+                logger.info(f"获取到之前的持仓状态: {prev_state}")
+                
+                # 计算持仓变化 - 添加交易记录时跳过验证
+                position_change = TransactionCalculator.calculate_position_change(
+                    transaction_data, prev_state, skip_validation=True
+                )
+                
+                logger.info(f"计算的持仓变化: {position_change}")
                 
                 # 添加交易
                 success, result = TransactionCalculator._handle_add(db_conn, transaction_data, position_change, holder_id)
@@ -162,8 +180,10 @@ class TransactionCalculator:
                     original_transaction_id
                 )
                 
-                # 计算持仓变化
-                position_change = TransactionCalculator.calculate_position_change(transaction_data, prev_state)
+                # 计算持仓变化 - 编辑交易记录时跳过验证
+                position_change = TransactionCalculator.calculate_position_change(
+                    transaction_data, prev_state, skip_validation=True
+                )
                 
                 # 编辑交易
                 success, result = TransactionCalculator._handle_edit(db_conn, transaction_data, position_change, original_transaction_id)
@@ -190,8 +210,10 @@ class TransactionCalculator:
                     is_split=True
                 )
                 
-                # 计算持仓变化
-                position_change = TransactionCalculator.calculate_position_change(transaction_data, prev_state)
+                # 计算持仓变化 - 分单操作时不跳过验证
+                position_change = TransactionCalculator.calculate_position_change(
+                    transaction_data, prev_state, is_split=True, skip_validation=False
+                )
                 
                 # 分单交易
                 success, result = TransactionCalculator._handle_split(db_conn, transaction_data, position_change, holder_id, original_transaction_id)
@@ -215,23 +237,40 @@ class TransactionCalculator:
         transaction_id: Optional[int] = None,
         is_split: bool = False
     ) -> Dict[str, Any]:
-        """获取之前的持仓状态"""
+        """获取之前的持仓状态，使用数据库中已有的字段提高效率"""
         table = "transaction_splits" if is_split else "stock_transactions"
         id_field = "holder_id" if is_split else "user_id"
         
-        sql = f"""
-            SELECT current_quantity as quantity,
-                   current_cost as cost,
-                   current_avg_cost as avg_cost
-            FROM {table}
-            WHERE {id_field} = %s
-                AND stock_code = %s
-                AND market = %s
-                AND (transaction_date < %s
-                     OR (transaction_date = %s AND id < %s))
-            ORDER BY transaction_date DESC, id DESC
-            LIMIT 1
-        """
+        # 检查表中是否有current_quantity字段
+        if is_split:
+            sql = f"""
+                SELECT current_quantity as quantity,
+                       current_cost as cost,
+                       current_avg_cost as avg_cost
+                FROM {table}
+                WHERE {id_field} = %s
+                    AND stock_code = %s
+                    AND market = %s
+                    AND (transaction_date < %s
+                         OR (transaction_date = %s AND id < %s))
+                ORDER BY transaction_date DESC, id DESC
+                LIMIT 1
+            """
+        else:
+            # stock_transactions表中没有这些字段，使用计算值
+            sql = f"""
+                SELECT 0 as quantity,
+                       0 as cost,
+                       0 as avg_cost
+                FROM {table}
+                WHERE {id_field} = %s
+                    AND stock_code = %s
+                    AND market = %s
+                    AND (transaction_date < %s
+                         OR (transaction_date = %s AND id < %s))
+                ORDER BY transaction_date DESC, id DESC
+                LIMIT 1
+            """
         
         params = [
             user_or_holder_id, stock_code, market,
@@ -239,15 +278,19 @@ class TransactionCalculator:
             transaction_id or 0
         ]
         
-        # 使用db_conn.fetch_one而不是cursor
+        # 使用db_conn.fetch_one获取最近一条记录
         result = db_conn.fetch_one(sql, params)
         
         if result:
-            return {
+            holding_state = {
                 'quantity': Decimal(str(result['quantity'])),
                 'cost': Decimal(str(result['cost'])),
                 'avg_cost': Decimal(str(result['avg_cost']))
             }
+            logger.info(f"获取持仓状态: 用户/持有人ID={user_or_holder_id}, 股票={stock_code}, 市场={market}, 日期={transaction_date}, 持仓量={holding_state['quantity']}, 成本={holding_state['cost']}, 平均成本={holding_state['avg_cost']}")
+            return holding_state
+            
+        # 如果没有记录，返回初始状态
         return {
             'quantity': Decimal('0'),
             'cost': Decimal('0'),
@@ -329,14 +372,11 @@ class TransactionCalculator:
                     transaction_type, transaction_code, total_quantity,
                     total_amount, broker_fee, transaction_levy,
                     stamp_duty, trading_fee, deposit_fee,
-                    prev_quantity, prev_cost, prev_avg_cost,
-                    current_quantity, current_cost, current_avg_cost,
-                    realized_profit, profit_rate, running_quantity, running_cost,
-                    created_at, updated_at, has_splits, avg_price, total_fees, net_amount
+                    total_fees, net_amount,
+                    created_at, updated_at, has_splits, avg_price
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
             """
             
@@ -355,22 +395,12 @@ class TransactionCalculator:
                 stamp_duty,
                 trading_fee,
                 deposit_fee,
-                float(position_change.get('prev_quantity', 0)),
-                float(position_change.get('prev_cost', 0)),
-                float(position_change.get('prev_avg_cost', 0)),
-                float(position_change.get('current_quantity', 0)),
-                float(position_change.get('current_cost', 0)),
-                float(position_change.get('current_avg_cost', 0)),
-                float(position_change.get('realized_profit', 0)),
-                float(position_change.get('profit_rate', 0)),
-                running_quantity,
-                running_cost,
+                float(position_change.get('total_fees', 0)),
+                float(position_change.get('net_amount', 0)),
                 current_time,
                 current_time,
                 0,  # has_splits初始为0
-                avg_price,
-                total_fees,  # 添加total_fees
-                net_amount   # 添加net_amount
+                float(position_change.get('avg_price', 0))
             ]
             
             # 执行插入
@@ -399,6 +429,26 @@ class TransactionCalculator:
                     db_conn.execute(detail_sql, detail_params)
                 
                 logger.info(f"插入交易明细成功，交易ID: {transaction_id}")
+            
+            # 重新计算后续交易记录
+            logger.info(f"开始重新计算后续交易记录: 股票代码={stock_code}, 市场={market}, 日期={transaction_data['transaction_date']}")
+            TransactionCalculator.recalculate_subsequent_transactions(
+                db_conn,
+                stock_code,
+                market,
+                transaction_data['transaction_date']
+            )
+            
+            # 如果有持有人ID，也重新计算持有人的后续交易记录
+            if holder_id:
+                logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={stock_code}, 市场={market}, 日期={transaction_data['transaction_date']}")
+                TransactionCalculator.recalculate_subsequent_transactions(
+                    db_conn,
+                    stock_code,
+                    market,
+                    transaction_data['transaction_date'],
+                    holder_id
+                )
             
             # 自动创建分单记录
             try:
@@ -494,7 +544,7 @@ class TransactionCalculator:
                             "系统自动创建的100%分单",
                             current_time,
                             current_time,
-                            avg_price
+                            float(position_change.get('avg_price', 0))
                         ]
                         
                         # 执行插入
@@ -608,7 +658,7 @@ class TransactionCalculator:
                                 "系统自动创建的100%分单",
                                 current_time,
                                 current_time,
-                                avg_price
+                                float(position_change.get('avg_price', 0))
                             ]
                             
                             # 执行插入
@@ -681,8 +731,9 @@ class TransactionCalculator:
                                 realized_profit, profit_rate, exchange_rate, remarks,
                                 created_at, updated_at, avg_price
                             ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                         """
                         
@@ -722,7 +773,7 @@ class TransactionCalculator:
                             "系统自动创建的100%分单",
                             current_time,
                             current_time,
-                            avg_price
+                            float(position_change.get('avg_price', 0))
                         ]
                         
                         # 执行插入
@@ -836,7 +887,7 @@ class TransactionCalculator:
                             "系统自动创建的100%分单",
                             current_time,
                             current_time,
-                            avg_price
+                            float(position_change.get('avg_price', 0))
                         ]
                         
                         # 执行插入
@@ -892,18 +943,9 @@ class TransactionCalculator:
                     transaction_levy = %s,
                     trading_fee = %s,
                     deposit_fee = %s,
-                    prev_quantity = %s,
-                    prev_cost = %s,
-                    prev_avg_cost = %s,
-                    current_quantity = %s,
-                    current_cost = %s,
-                    current_avg_cost = %s,
                     total_fees = %s,
                     net_amount = %s,
-                    realized_profit = %s,
-                    profit_rate = %s,
                     avg_price = %s,
-                    remarks = %s,
                     updated_at = NOW()
                 WHERE id = %s
             """
@@ -920,24 +962,42 @@ class TransactionCalculator:
                 transaction_data.get('transaction_levy', 0),
                 transaction_data.get('trading_fee', 0),
                 transaction_data.get('deposit_fee', 0),
-                position_change['prev_quantity'],
-                position_change['prev_cost'],
-                position_change['prev_avg_cost'],
-                position_change['current_quantity'],
-                position_change['current_cost'],
-                position_change['current_avg_cost'],
                 position_change['total_fees'],
                 position_change['net_amount'],
-                position_change['realized_profit'],
-                position_change['profit_rate'],
                 position_change['avg_price'],
-                transaction_data.get('remarks', ''),
                 transaction_id
             ]
             
             success = db_conn.execute(update_sql, params)
             if not success:
                 return False, {'message': '更新交易记录失败'}
+            
+            # 重新计算后续交易记录
+            logger.info(f"开始重新计算后续交易记录: 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+            TransactionCalculator.recalculate_subsequent_transactions(
+                db_conn,
+                transaction_data['stock_code'],
+                transaction_data['market'],
+                transaction_data['transaction_date']
+            )
+            
+            # 获取交易记录的持有人信息
+            split_query = """
+                SELECT holder_id FROM transaction_splits
+                WHERE original_transaction_id = %s
+                LIMIT 1
+            """
+            split_result = db_conn.fetch_one(split_query, [transaction_id])
+            if split_result and split_result['holder_id']:
+                holder_id = split_result['holder_id']
+                logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                TransactionCalculator.recalculate_subsequent_transactions(
+                    db_conn,
+                    transaction_data['stock_code'],
+                    transaction_data['market'],
+                    transaction_data['transaction_date'],
+                    holder_id
+                )
                 
             return True, {'position_change': position_change}
             
@@ -1018,6 +1078,26 @@ class TransactionCalculator:
                     logger.error("删除交易记录失败: 未找到匹配的记录")
                     return False, {'message': '删除交易记录失败: 未找到匹配的记录'}
                 
+                # 重新计算后续交易记录
+                logger.info(f"开始重新计算后续交易记录: 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                TransactionCalculator.recalculate_subsequent_transactions(
+                    db_conn,
+                    transaction_data['stock_code'],
+                    transaction_data['market'],
+                    transaction_data['transaction_date']
+                )
+                
+                # 如果有持有人ID，也重新计算持有人的后续交易记录
+                if holder_id:
+                    logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                    TransactionCalculator.recalculate_subsequent_transactions(
+                        db_conn,
+                        transaction_data['stock_code'],
+                        transaction_data['market'],
+                        transaction_data['transaction_date'],
+                        holder_id
+                    )
+            
             return True, {'prev_state': prev_state, 'message': '删除交易记录成功'}
             
         except Exception as e:
@@ -1046,10 +1126,12 @@ class TransactionCalculator:
             holder_name = transaction_data.get('holder_name', '')
             logger.info(f"从交易数据中获取的持有人名称: '{holder_name}'")
             
+            # 检查持有人是否存在，如果不存在则尝试创建
+            holder_exists = False
             if not holder_name:
                 # 查询持有人名称
                 holder_sql = """
-                    SELECT name FROM holders
+                    SELECT id, name FROM holders
                     WHERE id = %s
                     LIMIT 1
                 """
@@ -1057,10 +1139,66 @@ class TransactionCalculator:
                     holder_result = db_conn.fetch_one(holder_sql, [actual_holder_id])
                     if holder_result:
                         holder_name = holder_result['name']
+                        holder_exists = True
                         logger.info(f"从数据库获取的持有人名称: '{holder_name}'")
                     else:
-                        holder_name = f"持有人ID: {actual_holder_id}"
-                        logger.warning(f"未找到持有人信息，使用默认名称: '{holder_name}'")
+                        # 尝试获取用户ID
+                        user_id = transaction_data.get('user_id')
+                        if not user_id:
+                            # 从原始交易记录获取用户ID
+                            user_sql = """
+                                SELECT user_id FROM stock_transactions
+                                WHERE id = %s
+                                LIMIT 1
+                            """
+                            user_result = db_conn.fetch_one(user_sql, [original_transaction_id])
+                            if user_result:
+                                user_id = user_result['user_id']
+                                logger.info(f"从原始交易记录获取用户ID: {user_id}")
+                        
+                        # 如果持有人不存在，尝试创建
+                        if user_id:
+                            # 检查是否有默认持有人
+                            default_holder_sql = """
+                                SELECT id, name FROM holders
+                                WHERE user_id = %s
+                                LIMIT 1
+                            """
+                            default_holder = db_conn.fetch_one(default_holder_sql, [user_id])
+                            
+                            if default_holder:
+                                # 使用默认持有人
+                                actual_holder_id = default_holder['id']
+                                holder_name = default_holder['name']
+                                holder_exists = True
+                                logger.info(f"使用默认持有人: id={actual_holder_id}, name={holder_name}")
+                            else:
+                                # 创建新持有人
+                                create_holder_sql = """
+                                    INSERT INTO holders (user_id, name, created_at, updated_at)
+                                    VALUES (%s, %s, NOW(), NOW())
+                                """
+                                new_holder_name = f"默认持有人-{user_id}"
+                                db_conn.execute(create_holder_sql, [user_id, new_holder_name])
+                                
+                                # 获取新创建的持有人ID
+                                new_holder_sql = """
+                                    SELECT id, name FROM holders
+                                    WHERE user_id = %s
+                                    ORDER BY id DESC
+                                    LIMIT 1
+                                """
+                                new_holder = db_conn.fetch_one(new_holder_sql, [user_id])
+                                if new_holder:
+                                    actual_holder_id = new_holder['id']
+                                    holder_name = new_holder['name']
+                                    holder_exists = True
+                                    logger.info(f"创建新持有人: id={actual_holder_id}, name={holder_name}")
+                        
+                        if not holder_exists:
+                            # 如果仍然无法获取持有人，使用默认名称
+                            holder_name = f"持有人ID: {actual_holder_id}"
+                            logger.warning(f"未找到持有人信息，使用默认名称: '{holder_name}'")
                 except Exception as e:
                     logger.error(f"获取持有人名称失败: {str(e)}")
                     holder_name = f"持有人ID: {actual_holder_id}"
@@ -1162,15 +1300,29 @@ class TransactionCalculator:
                     position_change.get('current_avg_cost', 0),
                     total_fees,
                     net_amount,
+                    position_change.get('realized_profit', 0),
+                    position_change.get('profit_rate', 0),
+                    avg_price,
+                    stock_id,
                     running_quantity,
                     running_cost,
-                    stock_id,
                     existing_split['id']
                 ]
                 
                 try:
                     db_conn.execute(update_sql, update_params)
                     logger.info(f"更新分单记录成功: id={existing_split['id']}")
+                    
+                    # 重新计算持有人的后续交易记录
+                    logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={actual_holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                    TransactionCalculator.recalculate_subsequent_transactions(
+                        db_conn,
+                        transaction_data['stock_code'],
+                        transaction_data['market'],
+                        transaction_data['transaction_date'],
+                        actual_holder_id
+                    )
+                    
                     return True, {
                         'message': '更新分单记录成功',
                         'id': existing_split['id']
@@ -1268,20 +1420,18 @@ class TransactionCalculator:
             direct_split_sql = """
                 INSERT INTO transaction_splits (
                     original_transaction_id, holder_id, holder_name, split_ratio,
-                    transaction_date, stock_code, market, stock_name,
+                    transaction_date, stock_id, stock_code, stock_name, market,
                     transaction_type, total_quantity, total_amount,
                     broker_fee, stamp_duty, transaction_levy,
                     trading_fee, deposit_fee, transaction_code, 
                     prev_quantity, prev_cost, prev_avg_cost,
                     current_quantity, current_cost, current_avg_cost,
                     total_fees, net_amount, realized_profit,
-                    profit_rate, avg_price, stock_id,
-                    running_quantity, running_cost, created_at
+                    profit_rate, avg_price, running_quantity, running_cost, created_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
             """
             
@@ -1292,8 +1442,9 @@ class TransactionCalculator:
                 split_ratio,  # split_ratio
                 transaction_data['transaction_date'],  # transaction_date
                 stock_id,  # stock_id
-                transaction_data['market'],  # market
+                transaction_data['stock_code'],  # stock_code
                 stock_name,  # stock_name
+                transaction_data['market'],  # market
                 transaction_data['transaction_type'],  # transaction_type
                 float(transaction_data['total_quantity']),  # total_quantity
                 float(transaction_data['total_amount']),  # total_amount
@@ -1313,8 +1464,7 @@ class TransactionCalculator:
                 net_amount,  # net_amount
                 position_change.get('realized_profit', 0),  # realized_profit
                 position_change.get('profit_rate', 0),  # profit_rate
-                avg_price,  # avg_price
-                stock_id,  # stock_id
+                float(position_change.get('avg_price', 0)),  # avg_price
                 running_quantity,  # running_quantity
                 running_cost,  # running_cost
                 current_time  # created_at
@@ -1327,6 +1477,17 @@ class TransactionCalculator:
                     cursor.execute(direct_split_sql, direct_split_params)
                     conn.commit()
                     logger.info("分单记录插入成功")
+                    
+                    # 重新计算持有人的后续交易记录
+                    logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={actual_holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                    TransactionCalculator.recalculate_subsequent_transactions(
+                        db_conn,
+                        transaction_data['stock_code'],
+                        transaction_data['market'],
+                        transaction_data['transaction_date'],
+                        actual_holder_id
+                    )
+                    
                     return True, {
                         'message': '分单处理成功',
                         'id': original_transaction_id
@@ -1417,7 +1578,7 @@ class TransactionCalculator:
                 # 计算持仓变化
                 try:
                     position_change = TransactionCalculator.calculate_position_change(
-                        transaction_data, prev_state
+                        transaction_data, prev_state, is_split=True, skip_validation=True
                     )
                 except ValueError:
                     return False
@@ -1440,38 +1601,37 @@ class TransactionCalculator:
                             updated_at = NOW()
                         WHERE id = %s
                     """
+                    
+                    params = [
+                        position_change['prev_quantity'],
+                        position_change['prev_cost'],
+                        position_change['prev_avg_cost'],
+                        position_change['current_quantity'],
+                        position_change['current_cost'],
+                        position_change['current_avg_cost'],
+                        position_change['total_fees'],
+                        position_change['net_amount'],
+                        position_change['realized_profit'],
+                        position_change['profit_rate'],
+                        position_change['avg_price'],
+                        trans['id']
+                    ]
                 else:
                     update_sql = """
                         UPDATE stock_transactions
-                        SET prev_quantity = %s,
-                            prev_cost = %s,
-                            prev_avg_cost = %s,
-                            current_quantity = %s,
-                            current_cost = %s,
-                            current_avg_cost = %s,
-                            total_fees = %s,
+                        SET total_fees = %s,
                             net_amount = %s,
-                            realized_profit = %s,
-                            profit_rate = %s,
                             avg_price = %s,
                             updated_at = NOW()
                         WHERE id = %s
                     """
-                
-                params = [
-                    position_change['prev_quantity'],
-                    position_change['prev_cost'],
-                    position_change['prev_avg_cost'],
-                    position_change['current_quantity'],
-                    position_change['current_cost'],
-                    position_change['current_avg_cost'],
-                    position_change['total_fees'],
-                    position_change['net_amount'],
-                    position_change['realized_profit'],
-                    position_change['profit_rate'],
-                    position_change['avg_price'],
-                    trans['id']
-                ]
+                    
+                    params = [
+                        position_change['total_fees'],
+                        position_change['net_amount'],
+                        position_change['avg_price'],
+                        trans['id']
+                    ]
                 
                 # 使用db_conn.execute而不是cursor
                 db_conn.execute(update_sql, params)

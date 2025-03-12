@@ -1,5 +1,5 @@
 <template>
-  <div class="card" v-permission="'transaction:records:add'">
+  <div class="card">
     <div class="card-header">
       <h5 class="mb-0" data-testid="transaction-add-title">添加交易记录</h5>
     </div>
@@ -393,7 +393,8 @@ const form = ref({
   stamp_duty: '',
   trading_fee: '',
   deposit_fee: '',
-  market: 'HK'
+  market: 'HK',
+  holder_id: 1  // 默认使用ID为1的持有人（alan）
 })
 
 // 添加标记来跟踪股票是否已被选择
@@ -441,6 +442,55 @@ const submittingStock = ref(false)
 
 // 初始化模态框
 let stockModalInstance = null;
+
+// 初始化模态框函数
+const initModal = () => {
+  try {
+    if (addStockModal.value) {
+      // 先尝试销毁可能存在的实例
+      const existingModal = Modal.getInstance(addStockModal.value);
+      if (existingModal) {
+        existingModal.dispose();
+      }
+      
+      // 创建新实例
+      stockModalInstance = new Modal(addStockModal.value, {
+        backdrop: 'static',
+        keyboard: true
+      });
+      
+      // 添加隐藏事件监听器
+      addStockModal.value.addEventListener('hidden.bs.modal', cleanupModalEffects);
+    }
+  } catch (error) {
+    console.error('初始化模态框失败:', error);
+  }
+};
+
+// 清理模态框效果
+const cleanupModalEffects = () => {
+  // 移除模态框背景
+  const backdrops = document.querySelectorAll('.modal-backdrop');
+  backdrops.forEach(backdrop => {
+    backdrop.classList.remove('show');
+    setTimeout(() => backdrop.remove(), 150);
+  });
+  
+  // 移除body上的modal-open类和内联样式
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+  
+  // 重置表单
+  newStock.value = {
+    market: 'HK',
+    code: '',
+    name: '',
+    full_name: '',
+    current_price: null,
+    alertMessage: ''
+  };
+};
 
 // 方法
 const addDetail = () => {
@@ -611,16 +661,35 @@ const handleStockSelect = () => {
 // 选择股票
 const selectStock = (stock) => {
   if (stock && stock.code) {
-    form.value.stock_code = stock.code;
-    form.value.stock_name = stock.name || '';
-    form.value.market = stock.market || 'HK';
-    stockSelected.value = true;
-    delete errors.value.stock_code;
+    // 再次验证股票是否存在
+    axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(stock.code)}`)
+      .then(response => {
+        if (response.data.success && response.data.data.length > 0) {
+          const foundStock = response.data.data.find(s => s.code === stock.code)
+          if (foundStock) {
+            form.value.stock_code = foundStock.code
+            form.value.stock_name = foundStock.name || ''
+            form.value.market = foundStock.market || 'HK'
+            stockSelected.value = true
+          } else {
+            message.warning('该股票可能已被删除，请重新选择')
+            form.value.stock_code = ''
+            form.value.stock_name = ''
+            stockSelected.value = false
+          }
+        }
+      })
+      .catch(error => {
+        console.error('验证股票失败:', error)
+        message.error('验证股票失败，请重新选择')
+      })
   }
   
-  showStockList.value = false;
-  filteredStocks.value = [];
-  currentStockIndex.value = -1;
+  setTimeout(() => {
+    showStockList.value = false
+    filteredStocks.value = []
+    currentStockIndex.value = -1
+  }, 100)
 }
 
 // 提交表单
@@ -642,6 +711,9 @@ const submitForm = async () => {
       return sum + (quantity * price)
     }, 0)
     
+    // 计算平均价格
+    const avgPrice = totalQuantity > 0 ? totalAmount / totalQuantity : 0
+    
     const submitData = {
       transaction_date: form.value.transaction_date,
       stock_code: form.value.stock_code,
@@ -659,6 +731,8 @@ const submitForm = async () => {
       stamp_duty: parseFloat(form.value.stamp_duty) || 0,
       trading_fee: parseFloat(form.value.trading_fee) || 0,
       deposit_fee: parseFloat(form.value.deposit_fee) || 0,
+      holder_id: form.value.holder_id,  // 添加持有人ID
+      avg_price: avgPrice  // 添加平均价格
     }
     
     console.log('提交的交易数据:', submitData)
@@ -710,7 +784,8 @@ const resetForm = () => {
     stamp_duty: '',
     trading_fee: '',
     deposit_fee: '',
-    market: 'HK'
+    market: 'HK',
+    holder_id: 1  // 保持默认持有人ID
   }
   errors.value = {}
   stockSelected.value = false
@@ -760,55 +835,6 @@ onMounted(() => {
   });
 
   document.addEventListener('click', handleClickOutside)
-
-  // 初始化模态框
-  const initModal = () => {
-    try {
-      if (addStockModal.value) {
-        // 先尝试销毁可能存在的实例
-        const existingModal = Modal.getInstance(addStockModal.value);
-        if (existingModal) {
-          existingModal.dispose();
-        }
-        
-        // 创建新实例
-        stockModalInstance = new Modal(addStockModal.value, {
-          backdrop: 'static',
-          keyboard: true
-        });
-        
-        // 添加隐藏事件监听器
-        addStockModal.value.addEventListener('hidden.bs.modal', cleanupModalEffects);
-      }
-    } catch (error) {
-      console.error('初始化模态框失败:', error);
-    }
-  };
-  
-  // 清理模态框效果
-  const cleanupModalEffects = () => {
-    // 移除模态框背景
-    const backdrops = document.querySelectorAll('.modal-backdrop');
-    backdrops.forEach(backdrop => {
-      backdrop.classList.remove('show');
-      setTimeout(() => backdrop.remove(), 150);
-    });
-    
-    // 移除body上的modal-open类和内联样式
-    document.body.classList.remove('modal-open');
-    document.body.style.overflow = '';
-    document.body.style.paddingRight = '';
-    
-    // 重置表单
-    newStock.value = {
-      market: 'HK',
-      code: '',
-      name: '',
-      full_name: '',
-      current_price: null,
-      alertMessage: ''
-    };
-  };
   
   // 延迟初始化模态框，确保DOM已完全加载
   setTimeout(initModal, 500);
@@ -994,18 +1020,11 @@ const handleKeyNavigation = (event, fieldName) => {
 
 // 处理股票代码输入
 const handleStockCodeInput = debounce(async (event) => {
-  const query = event.target.value.trim();
-  
-  // 清除之前的选择状态
-  if (stockSelected.value && query !== form.value.stock_code) {
-    stockSelected.value = false;
-    form.value.stock_name = '';
-  }
-  
+  const query = event.target.value.trim()
   if (!query) {
-    showStockList.value = false;
-    filteredStocks.value = [];
-    return;
+    showStockList.value = false
+    filteredStocks.value = []
+    return
   }
 
   try {
@@ -1014,23 +1033,29 @@ const handleStockCodeInput = debounce(async (event) => {
       params: {
         timestamp: new Date().getTime() // 添加时间戳防止缓存
       }
-    });
+    })
     
     if (response.data.success && Array.isArray(response.data.data)) {
-      filteredStocks.value = response.data.data;
-      showStockList.value = filteredStocks.value.length > 0;
-      currentStockIndex.value = filteredStocks.value.length > 0 ? 0 : -1;
+      filteredStocks.value = response.data.data
+      showStockList.value = filteredStocks.value.length > 0
+      currentStockIndex.value = -1
+      
+      // 如果没有找到股票，显示提示信息
+      if (filteredStocks.value.length === 0) {
+        message.info('未找到匹配的股票')
+      }
     } else {
-      filteredStocks.value = [];
-      showStockList.value = false;
+      filteredStocks.value = []
+      showStockList.value = false
+      message.warning('获取股票列表失败')
     }
   } catch (error) {
-    console.error('搜索股票失败:', error);
-    filteredStocks.value = [];
-    showStockList.value = false;
-    message.error('搜索股票失败，请重试');
+    console.error('搜索股票失败:', error)
+    filteredStocks.value = []
+    showStockList.value = false
+    message.error('搜索股票失败，请重试')
   }
-}, 300);
+}, 300)
 
 // 导航股票列表
 const navigateStockList = (direction) => {
@@ -1055,55 +1080,40 @@ const closeStockList = () => {
 
 // 点击外部关闭股票列表
 const handleClickOutside = (event) => {
-  if (!event.target.closest('.position-relative') && showStockList.value) {
-    showStockList.value = false;
-    currentStockIndex.value = -1;
+  if (!event.target.closest('.position-relative')) {
+    closeStockList()
   }
 }
 
 // 修改股票代码失去焦点的处理函数
 const handleStockCodeBlur = async (event) => {
-  // 延迟执行，以便点击股票列表项的事件能够先触发
   setTimeout(async () => {
-    // 如果股票列表正在显示，不执行后续逻辑
-    if (showStockList.value) {
-      return;
-    }
-    
-    const code = form.value.stock_code.trim();
+    const code = form.value.stock_code
     if (!code) {
-      stockSelected.value = false;
-      return;
+      stockSelected.value = false
+      return
     }
 
-    // 如果已经选择了股票，不再执行搜索
     if (stockSelected.value && form.value.stock_name) {
-      return;
+      return
     }
 
     try {
-      // 先尝试在现有股票中查找完全匹配的股票
-      const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(code)}`, {
-        params: {
-          timestamp: new Date().getTime() // 添加时间戳防止缓存
-        }
-      });
-      
+      const response = await axios.get(`/api/stock/stocks/search?query=${encodeURIComponent(code)}`)
       if (response.data.success && Array.isArray(response.data.data)) {
-        const exactMatch = response.data.data.find(stock => stock.code === code);
+        const exactMatch = response.data.data.find(stock => stock.code === code)
         if (exactMatch) {
-          form.value.stock_code = exactMatch.code;
-          form.value.stock_name = exactMatch.name;
-          form.value.market = exactMatch.market;
-          stockSelected.value = true;
-          return;
+          form.value.stock_code = exactMatch.code
+          form.value.stock_name = exactMatch.name
+          form.value.market = exactMatch.market
+          stockSelected.value = true
+          return
         }
       }
 
-      // 如果没有找到完全匹配的股票，尝试搜索新股票
-      const searchResponse = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(code)}`);
+      const searchResponse = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(code)}`)
       if (searchResponse.data.success && searchResponse.data.data.length > 0) {
-        const stockData = searchResponse.data.data[0];
+        const stockData = searchResponse.data.data[0]
         
         newStock.value = {
           market: stockData.market === 'HK' || stockData.exchange === 'HKG' ? 'HK' : 'USA',
@@ -1112,9 +1122,9 @@ const handleStockCodeBlur = async (event) => {
           google_code: stockData.query,
           current_price: stockData.price,
           alertMessage: ''
-        };
+        }
         
-        showStockModal.value = true;
+        showStockModal.value = true
       } else {
         newStock.value = {
           market: 'HK',
@@ -1123,11 +1133,11 @@ const handleStockCodeBlur = async (event) => {
           google_code: '',
           current_price: null,
           alertMessage: '未找到股票信息，请手动输入股票详情'
-        };
-        showStockModal.value = true;
+        }
+        showStockModal.value = true
       }
     } catch (error) {
-      console.error('搜索股票失败:', error);
+      console.error('搜索股票失败:', error)
       newStock.value = {
         market: 'HK',
         code: code,
@@ -1135,11 +1145,11 @@ const handleStockCodeBlur = async (event) => {
         google_code: '',
         current_price: null,
         alertMessage: '搜索股票失败，请手动输入股票详情'
-      };
-      showStockModal.value = true;
+      }
+      showStockModal.value = true
     }
-  }, 200);
-};
+  }, 200)
+}
 
 // 监听股票代码变化
 watch(() => form.value.stock_code, (newCode) => {
@@ -1313,16 +1323,8 @@ const submitNewStock = async () => {
 }
 
 const handleStockCodeFocus = () => {
-  // 如果已经选择了股票，不清空输入框
-  if (!stockSelected.value) {
-    form.value.stock_code = '';
-  }
-  
-  // 如果有输入内容，显示搜索结果
-  if (form.value.stock_code && !stockSelected.value) {
-    handleStockCodeInput({ target: { value: form.value.stock_code } });
-  }
-};
+  form.value.stock_code = ''
+}
 
 // 修改关闭模态框的逻辑
 const closeStockModal = () => {

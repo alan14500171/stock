@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import axios from 'axios'
+import { useUserStore } from './user'
 
 export const usePermissionStore = defineStore('permission', () => {
   // 用户权限列表
@@ -22,6 +23,7 @@ export const usePermissionStore = defineStore('permission', () => {
     loading.value = true;
     
     try {
+      const userStore = useUserStore();
       const user = userStore.user;
       const isAdmin = userStore.isAdmin;
       
@@ -31,7 +33,7 @@ export const usePermissionStore = defineStore('permission', () => {
         roles.value = [
           { id: 'admin', name: '管理员', code: 'admin' }
         ];
-        setupAdminPermissions();
+        setAdminPermissions();
       } else {
         try {
           // 从后端获取用户权限
@@ -65,12 +67,12 @@ export const usePermissionStore = defineStore('permission', () => {
           // 加载失败时设置默认权限
           permissions.value = [];
           roles.value = [];
-          setupDefaultPermissions();
+          setDefaultPermissions();
         }
       }
     } catch (error) {
       // 出错时设置默认权限
-      setupDefaultPermissions();
+      setDefaultPermissions();
     } finally {
       loading.value = false;
       loaded.value = true;

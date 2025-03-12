@@ -548,9 +548,13 @@ def get_transaction_by_code_param(transaction_code):
                 }
                 formatted_splits.append(formatted_split)
             
+            # 记录返回的数据结构
+            logger.info(f"返回的分单记录数量: {len(formatted_splits)}")
+            logger.debug(f"返回的分单记录: {formatted_splits}")
+            
             return jsonify({
                 'success': True,
-                'splits': formatted_splits
+                'data': formatted_splits  # 修改为'data'字段，与前端期望的结构一致
             })
             
     except Exception as e:

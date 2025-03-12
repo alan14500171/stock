@@ -24,7 +24,7 @@
                   <div class="mb-3 row">
                     <label class="col-sm-4 col-form-label">交易日期</label>
                     <div class="col-sm-8">
-                      <p class="form-control-plaintext">{{ transaction.transaction_date }}</p>
+                      <p class="form-control-plaintext">{{ formatTransactionDate(transaction.transaction_date) }}</p>
                     </div>
                   </div>
                   <div class="mb-3 row">
@@ -175,7 +175,7 @@
           </div>
 
           <!-- 分单历史区域 -->
-          <div class="card" v-if="transaction && splitHistory.length > 0">
+          <div class="card" v-if="transaction && splitHistory && splitHistory.length > 0">
             <div class="card-header bg-light">
               <h5 class="mb-0">分单历史</h5>
             </div>
@@ -255,7 +255,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['saved'])
+const emit = defineEmits(['saved', 'hidden'])
 
 const toast = useToast()
 
@@ -282,6 +282,16 @@ const formatCurrency = (value) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
+}
+
+// 格式化交易日期
+const formatTransactionDate = (dateStr) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 // 计算属性
@@ -333,23 +343,113 @@ const initModal = () => {
   }
 };
 
+// 处理模态框隐藏事件
+const handleModalHidden = () => {
+  // 重置表单状态
+  resetSplitItems();
+  transaction.value = null;
+  splitHistory.value = [];
+  notFound.value = false;
+  loading.value = false;
+  savingData.value = false;
+  
+  // 通知父组件模态框已关闭
+  emit('hidden');
+};
+
+// 重置分单项
+const resetSplitItems = () => {
+  console.log('重置分单项，当前交易数据:', transaction.value);
+  
+  if (!transaction.value) {
+    console.log('交易数据为空，设置空分单项');
+    splitItems.value = [];
+    return;
+  }
+  
+  // 创建一个默认的100%分单
+  splitItems.value = [{
+    holder_id: '',
+    holder_name: '',
+    ratio: 100,
+    quantity: transaction.value.total_quantity || 0,
+    amount: transaction.value.total_amount || 0,
+    fees: transaction.value.total_fees || 0
+  }];
+  
+  console.log('已创建默认分单项:', splitItems.value);
+};
+
+// 加载持有人列表
+const loadHolders = async () => {
+  try {
+    const response = await axios.get('/api/transaction/get_users');
+    if (response.data.success) {
+      holders.value = response.data.data;
+      console.log('加载持有人列表成功:', holders.value);
+    } else {
+      console.error('加载持有人列表失败:', response.data.message);
+      toast.error('加载持有人列表失败: ' + response.data.message);
+    }
+  } catch (error) {
+    console.error('加载持有人列表失败:', error);
+    toast.error('加载持有人列表失败，请稍后重试');
+  }
+};
+
 // 显示模态框
 const showModal = async (data) => {
+  console.log('showModal被调用，传入数据:', data);
+  
   if (!splitModal.value) {
     initModal();
   }
   
-  await loadHolders();
-  currentTransaction.value = data;
+  // 重置状态
+  loading.value = true;
+  notFound.value = false;
+  transaction.value = null;
+  splitItems.value = [];
+  splitHistory.value = []; // 确保初始化为空数组
   
-  // 检查交易是否存在分单记录
-  if (data.has_splits) {
-    loadSplitHistory(data.transaction_code);
-  } else {
-    // 创建一个默认的100%分单
-    resetSplitItems();
+  try {
+    // 加载持有人列表
+    await loadHolders();
+    
+    if (data) {
+      // 直接使用传入的交易数据
+      transaction.value = data;
+      console.log('设置交易数据:', transaction.value);
+      
+      // 检查交易是否存在分单记录
+      if (data.has_splits && data.transaction_code) {
+        try {
+          await loadSplitHistory(data.transaction_code);
+        } catch (error) {
+          console.error('加载分单历史记录失败:', error);
+          splitHistory.value = []; // 确保初始化为空数组
+          resetSplitItems();
+        }
+      } else {
+        // 创建一个默认的100%分单
+        splitHistory.value = []; // 确保初始化为空数组
+        resetSplitItems();
+      }
+    } else if (props.transactionId || props.transactionCode) {
+      // 如果没有传入数据，但有ID或编号，则加载交易记录
+      await loadTransaction();
+    } else {
+      console.warn('没有提供交易数据，无法显示分单模态框');
+      return;
+    }
+  } catch (error) {
+    console.error('初始化分单模态框失败:', error);
+    toast.error('初始化分单模态框失败: ' + error.message);
+  } finally {
+    loading.value = false;
   }
   
+  // 显示模态框
   if (splitModal.value) {
     splitModal.value.show();
   }
@@ -376,6 +476,7 @@ const loadTransaction = async (transactionCode = null) => {
   notFound.value = false
   transaction.value = null
   splitItems.value = []
+  splitHistory.value = [] // 确保初始化为空数组
 
   try {
     let response
@@ -394,7 +495,13 @@ const loadTransaction = async (transactionCode = null) => {
       await loadUsers()
       
       // 加载分单历史
-      await loadSplitHistory()
+      if (transaction.value && transaction.value.transaction_code) {
+        await loadSplitHistory(transaction.value.transaction_code)
+      } else {
+        console.warn('交易记录缺少transaction_code，无法加载分单历史')
+        splitHistory.value = [] // 确保初始化为空数组
+        resetSplitItems()
+      }
       
       // 如果已有分单记录，自动填充到表单中
       if (splitHistory.value && splitHistory.value.length > 0) {
@@ -482,11 +589,22 @@ const loadUsers = async () => {
 
 // 加载分单历史记录
 const loadSplitHistory = async (transactionCode) => {
+  if (!transactionCode) {
+    console.error('加载分单历史记录失败: 交易编号为空');
+    splitHistory.value = []; // 确保初始化为空数组
+    resetSplitItems();
+    return;
+  }
+
+  console.log(`正在加载交易编号 ${transactionCode} 的分单历史记录`);
+  
   try {
     const response = await axios.get(`/api/transaction/split/${transactionCode}`);
+    console.log('分单历史记录API响应:', response.data);
     
     if (response.data.success) {
-      splitHistory.value = response.data.data;
+      splitHistory.value = response.data.data || []; // 确保即使返回null也初始化为空数组
+      console.log('获取到分单历史记录:', splitHistory.value);
       
       // 如果有历史记录，用它来初始化当前的分单项
       if (splitHistory.value && splitHistory.value.length > 0) {
@@ -495,19 +613,25 @@ const loadSplitHistory = async (transactionCode) => {
           holder_id: item.holder_id,
           holder_name: item.holder_name,
           ratio: parseFloat(item.split_ratio) * 100, // 转换为百分比
-          original_id: item.id
+          quantity: item.total_quantity,
+          amount: item.total_amount,
+          fees: item.total_fees
         }));
+        console.log('已填充历史分单记录:', splitItems.value);
       } else {
-        // 如果没有历史记录，则重置为默认100%分单
+        console.log('没有分单历史记录，使用默认分单');
         resetSplitItems();
       }
     } else {
-      toast.error('加载分单历史记录失败: ' + response.data.message);
+      console.warn('获取分单历史记录失败:', response.data.message);
+      splitHistory.value = []; // 确保初始化为空数组
       resetSplitItems();
     }
   } catch (error) {
-    toast.error('加载分单历史记录时出错: ' + error.message);
+    console.error('获取分单历史记录失败:', error);
+    splitHistory.value = []; // 确保初始化为空数组
     resetSplitItems();
+    toast.error('获取分单历史记录失败，将使用默认分单');
   }
 };
 
@@ -748,8 +872,8 @@ const formatSplitRatio = (ratioValue) => {
   const ratio = parseFloat(ratioValue);
   if (isNaN(ratio)) return '';
   
-  // 转换为百分比形式，保留2位小数
-  return ratio.toFixed(2);
+  // 将比例值乘以100转换为百分比形式，保留2位小数
+  return (ratio * 100).toFixed(2);
 };
 
 // 根据持有人ID设置持有人名称

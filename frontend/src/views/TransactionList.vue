@@ -739,11 +739,11 @@ const addTransaction = () => {
 // 工具函数
 const formatDate = (date) => {
   if (!date) return '-'
-  return new Date(date).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).replace(/\//g, '-')
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 const formatNumber = (value, decimals = 2) => {
@@ -837,9 +837,10 @@ const splitModal = ref(null)
 
 const goToSplit = (transaction) => {
   if (splitModal.value) {
-    splitModal.value.loadUsers()
-    splitModal.value.loadTransaction(transaction.transaction_code)
-    splitModal.value.showModal()
+    console.log('打开分单模态框，交易数据:', transaction);
+    splitModal.value.showModal(transaction);
+  } else {
+    console.error('分单模态框引用不存在');
   }
 }
 
