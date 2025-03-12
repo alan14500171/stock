@@ -237,7 +237,7 @@
                             <thead class="table-light">
                               <tr>
                                 <th class="transaction-info">交易日期</th>
-                                <th class="text-end cost">交易前数量</th>
+                                <th class="text-center cost">交易前数量</th>
                                 <th class="quantity-price">数量@单价</th>
                                 <th class="text-end cost">交易后数量</th>
                                 <th class="text-end amount">买入金额</th>
@@ -259,7 +259,7 @@
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code ? detail.transaction_code.trim() : '-' }}</span>
                                   </td>
-                                  <td class="text-end cost">
+                                  <td class="text-center cost">
                                     {{ formatNumber(detail.prev_quantity, 0) }}
                                   </td>
                                   <td class="quantity-price">
@@ -358,7 +358,7 @@
                             <thead class="table-light">
                               <tr>
                                 <th class="transaction-info">交易日期</th>
-                                <th class="text-end cost">交易前数量</th>
+                                <th class="text-center cost">交易前数量</th>
                                 <th class="quantity-price">数量@单价</th>
                                 <th class="text-end cost">交易后数量</th>
                                 <th class="text-end amount">买入金额</th>
@@ -380,7 +380,7 @@
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code ? detail.transaction_code.trim() : '-' }}</span>
                                   </td>
-                                  <td class="text-end cost">
+                                  <td class="text-center cost">
                                     {{ formatNumber(detail.prev_quantity, 0) }}
                                   </td>
                                   <td class="quantity-price">
