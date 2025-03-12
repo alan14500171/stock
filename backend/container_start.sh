@@ -35,14 +35,14 @@ if [ ! -f "/app/config/db_config.py" ]; then
     echo -e "${GREEN}✓ 配置文件已创建${NC}"
 fi
 
-# 数据库连接参数
-DB_HOST=${DB_HOST:-"219.92.22.148"}
+# 数据库连接参数 - 默认使用本地MySQL容器
+DB_HOST=${DB_HOST:-"db"}
 DB_PORT=${DB_PORT:-3306}
 DB_USER=${DB_USER:-"root"}
-DB_PASS=${DB_PASS:-"Zxc000123"}
+DB_PASS=${DB_PASSWORD:-"rootpassword"}
 DB_NAME=${DB_NAME:-"stock"}
-MAX_RETRIES=${DB_CONNECT_RETRY:-10}
-RETRY_DELAY=${DB_CONNECT_RETRY_DELAY:-5}
+MAX_RETRIES=${DB_CONNECT_RETRY:-5}
+RETRY_DELAY=${DB_CONNECT_RETRY_DELAY:-3}
 
 # 测试数据库连接函数
 test_db_connection() {
