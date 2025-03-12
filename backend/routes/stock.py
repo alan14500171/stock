@@ -1223,10 +1223,17 @@ def search_stock():
                 'message': '请提供股票代码'
             }), 400
 
+        # 记录请求信息
+        logger.info(f"搜索股票代码: {code}")
+        
+        # 调用搜索方法
+        search_results = checker.search_stock(code)
+        logger.info(f"搜索结果: {search_results}")
+        
         # 添加时间戳和缓存控制
         response = make_response(jsonify({
             'success': True,
-            'data': checker.search_stock(code)
+            'data': search_results
         }))
         
         # 设置响应头以防止缓存
@@ -1237,7 +1244,7 @@ def search_stock():
         return response
 
     except Exception as e:
-        logger.error(f"搜索股票失败: {str(e)}")
+        logger.error(f"搜索股票失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'搜索股票失败: {str(e)}'

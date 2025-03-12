@@ -155,106 +155,148 @@ class CurrencyChecker:
         :param code: 股票代码
         :return: 包含市场和价格信息的字典列表
         """
-        results = []
-        original_code = code
-        
-        # 如果输入的是纯数字，优先尝试港股市场
-        if code.isdigit():
-            codes_to_try = set()  # 使用集合去重
+        try:
+            if not code:
+                logger.warning("搜索股票时提供的代码为空")
+                return []
             
-            # 处理不同长度的数字
-            if len(code) <= 3:
-                # 补0到4位用于查询
-                codes_to_try.add(code.zfill(4))
-            elif len(code) == 5 and code.startswith('0'):
-                # 如果是5位数且以0开头，尝试去掉前导0
-                codes_to_try.add(code[1:])
-            elif len(code) == 4:
-                codes_to_try.add(code)
+            logger.info(f"开始搜索股票: {code}")
+            results = []
+            original_code = code
             
-            # 优先尝试港股市场
-            for try_code in codes_to_try:
+            # 如果输入的是纯数字，优先尝试港股市场
+            if code.isdigit():
+                codes_to_try = set()  # 使用集合去重
+                
+                # 处理不同长度的数字
+                if len(code) <= 3:
+                    # 补0到4位用于查询
+                    codes_to_try.add(code.zfill(4))
+                elif len(code) == 5 and code.startswith('0'):
+                    # 如果是5位数且以0开头，尝试去掉前导0
+                    codes_to_try.add(code[1:])
+                elif len(code) == 4:
+                    codes_to_try.add(code)
+                
+                logger.info(f"处理后的股票代码: {codes_to_try}")
+                
+                # 优先尝试港股市场
+                for try_code in codes_to_try:
+                    try:
+                        timestamp = int(datetime.now().timestamp() * 1000)
+                        query = f"{try_code}:HKG"
+                        url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
+                        
+                        logger.info(f"尝试查询港股: {query}, URL: {url}")
+                        
+                        headers = CurrencyChecker.HEADERS.copy()
+                        headers.update({
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0',
+                            'If-None-Match': '*',
+                            'If-Modified-Since': '0'
+                        })
+                        
+                        # 增加重试和超时设置
+                        for retry in range(3):
+                            try:
+                                response = requests.get(url, headers=headers, timeout=15)
+                                response.raise_for_status()
+                                break
+                            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                                if retry < 2:
+                                    logger.warning(f"查询港股 {query} 超时或连接错误，正在重试 ({retry+1}/3): {str(e)}")
+                                    continue
+                                else:
+                                    raise
+                        
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        result = CurrencyChecker._extract_price(soup)
+                        
+                        if result and result.get('price'):
+                            price = result['price']
+                            name_element = soup.find('div', {'class': 'zzDege'})
+                            stock_name = name_element.text if name_element else try_code
+                            
+                            logger.info(f"找到港股: {try_code}, 名称: {stock_name}, 价格: {price}")
+                            
+                            results.append({
+                                'market': 'HK',
+                                'exchange': 'HKG',
+                                'price': price,
+                                'query': query,
+                                'code_name': stock_name,
+                                'code': original_code  # 保持原始代码
+                            })
+                            # 如果找到了港股，直接返回结果
+                            if results:
+                                return results
+                    except Exception as e:
+                        logger.error(f"搜索港股 {try_code} 时发生错误: {str(e)}")
+                        continue
+
+            # 如果没有找到港股或输入不是纯数字，遍历其他市场
+            for market, exchange in CurrencyChecker.MARKETS.items():
+                if market == 'HK' and results:  # 如果已经找到港股结果，跳过
+                    continue
+                
                 try:
                     timestamp = int(datetime.now().timestamp() * 1000)
-                    query = f"{try_code}:HKG"
+                    query = f"{original_code}:{exchange}"
                     url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
+                    
+                    logger.info(f"尝试查询市场 {market}: {query}, URL: {url}")
                     
                     headers = CurrencyChecker.HEADERS.copy()
                     headers.update({
                         'Cache-Control': 'no-cache, no-store, must-revalidate',
                         'Pragma': 'no-cache',
-                        'If-None-Match': '',
-                        'If-Modified-Since': ''
+                        'Expires': '0',
+                        'If-None-Match': '*',
+                        'If-Modified-Since': '0'
                     })
                     
-                    response = requests.get(url, headers=headers, timeout=10)
-                    response.raise_for_status()
+                    # 增加重试和超时设置
+                    for retry in range(3):
+                        try:
+                            response = requests.get(url, headers=headers, timeout=15)
+                            response.raise_for_status()
+                            break
+                        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                            if retry < 2:
+                                logger.warning(f"查询市场 {market} 股票 {query} 超时或连接错误，正在重试 ({retry+1}/3): {str(e)}")
+                                continue
+                            else:
+                                raise
                     
                     soup = BeautifulSoup(response.text, 'html.parser')
                     result = CurrencyChecker._extract_price(soup)
                     
-                    if result and result['price']:
+                    if result and result.get('price'):
                         price = result['price']
                         name_element = soup.find('div', {'class': 'zzDege'})
-                        stock_name = name_element.text if name_element else try_code
+                        stock_name = name_element.text if name_element else original_code
+                        
+                        logger.info(f"找到市场 {market} 股票: {original_code}, 名称: {stock_name}, 价格: {price}")
                         
                         results.append({
-                            'market': 'HK',
-                            'exchange': 'HKG',
+                            'market': market,
+                            'exchange': exchange,
                             'price': price,
                             'query': query,
                             'code_name': stock_name,
                             'code': original_code  # 保持原始代码
                         })
-                        # 如果找到了港股，直接返回结果
-                        if results:
-                            return results
                 except Exception as e:
-                    logger.error(f"搜索港股 {try_code} 时发生错误: {str(e)}")
+                    logger.error(f"搜索市场 {market} 时发生错误: {str(e)}")
                     continue
-
-        # 如果没有找到港股或输入不是纯数字，遍历其他市场
-        for market, exchange in CurrencyChecker.MARKETS.items():
-            if market == 'HK' and results:  # 如果已经找到港股结果，跳过
-                continue
-                
-            try:
-                timestamp = int(datetime.now().timestamp() * 1000)
-                query = f"{original_code}:{exchange}"
-                url = f'https://www.google.com/finance/quote/{query}?hl=zh&gl=CN&_={timestamp}'
-                
-                headers = CurrencyChecker.HEADERS.copy()
-                headers.update({
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'If-None-Match': '',
-                    'If-Modified-Since': ''
-                })
-                
-                response = requests.get(url, headers=headers, timeout=10)
-                response.raise_for_status()
-                
-                soup = BeautifulSoup(response.text, 'html.parser')
-                result = CurrencyChecker._extract_price(soup)
-                
-                if result and result['price']:
-                    price = result['price']
-                    name_element = soup.find('div', {'class': 'zzDege'})
-                    stock_name = name_element.text if name_element else original_code
-                    
-                    results.append({
-                        'market': market,
-                        'exchange': exchange,
-                        'price': price,
-                        'query': query,
-                        'code_name': stock_name,
-                        'code': original_code  # 保持原始代码
-                    })
-            except Exception as e:
-                logger.error(f"搜索市场 {market} 时发生错误: {str(e)}")
-                continue
-                
-        return results
+            
+            logger.info(f"搜索结果: 找到 {len(results)} 条记录")
+            return results
+        except Exception as e:
+            logger.error(f"搜索股票时发生未处理的错误: {str(e)}", exc_info=True)
+            return []
 
     @staticmethod
     def get_exchange_rate(from_currency, to_currency='HKD'):
