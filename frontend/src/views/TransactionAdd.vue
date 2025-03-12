@@ -269,14 +269,14 @@
     </div>
 
     <!-- 添加股票对话框 -->
-    <div class="modal fade" id="addStockModal" tabindex="-1" ref="addStockModal" data-testid="add-stock-modal">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" data-testid="add-stock-modal-title">添加新股票</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" data-testid="add-stock-modal-close"></button>
+    <teleport to="body">
+      <div v-if="showStockModal" class="stock-modal-backdrop" @click.self="closeStockModal">
+        <div class="stock-modal">
+          <div class="stock-modal-header">
+            <h5 class="stock-modal-title" data-testid="add-stock-modal-title">添加新股票</h5>
+            <button type="button" class="stock-modal-close" @click="closeStockModal">&times;</button>
           </div>
-          <div class="modal-body">
+          <div class="stock-modal-body" data-testid="add-stock-modal">
             <form @submit.prevent="submitNewStock">
               <div class="mb-3">
                 <label class="form-label" data-testid="new-stock-code-label">股票代码</label>
@@ -287,7 +287,6 @@
                   :class="{ 'is-invalid': errors.code }"
                   placeholder="输入股票代码后将自动查询股票信息"
                   @keydown.enter.prevent="handleNewStockCodeEnter"
-                  @keydown.tab.prevent="handleNewStockCodeEnter"
                   data-testid="new-stock-code-input"
                 />
                 <div class="invalid-feedback" data-testid="new-stock-code-error">{{ errors.code }}</div>
@@ -348,16 +347,22 @@
               </div>
             </form>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-testid="add-stock-modal-cancel">取消</button>
-            <button type="button" class="btn btn-primary" @click="submitNewStock" :disabled="submittingStock" data-testid="add-stock-modal-submit">
+          <div class="stock-modal-footer">
+            <button type="button" class="btn-secondary" @click="closeStockModal" data-testid="add-stock-modal-cancel">取消</button>
+            <button 
+              type="button" 
+              class="btn-primary" 
+              @click="submitNewStock" 
+              :disabled="submittingStock" 
+              data-testid="add-stock-modal-submit"
+            >
               <span v-if="submittingStock" class="spinner-border spinner-border-sm me-1"></span>
               确认添加
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -423,6 +428,7 @@ const currentStockIndex = ref(-1)
 
 // 新增股票相关的状态
 const addStockModal = ref(null)
+const showStockModal = ref(false)
 const newStock = ref({
   market: 'HK',
   code: '',
@@ -432,6 +438,9 @@ const newStock = ref({
   alertMessage: ''
 })
 const submittingStock = ref(false)
+
+// 初始化模态框
+let stockModalInstance = null;
 
 // 方法
 const addDetail = () => {
@@ -771,8 +780,45 @@ onMounted(() => {
 
   document.addEventListener('click', handleClickOutside)
 
-  // 添加对话框关闭时的处理
-  addStockModal.value?.addEventListener('hidden.bs.modal', () => {
+  // 初始化模态框
+  const initModal = () => {
+    try {
+      if (addStockModal.value) {
+        // 先尝试销毁可能存在的实例
+        const existingModal = Modal.getInstance(addStockModal.value);
+        if (existingModal) {
+          existingModal.dispose();
+        }
+        
+        // 创建新实例
+        stockModalInstance = new Modal(addStockModal.value, {
+          backdrop: 'static',
+          keyboard: true
+        });
+        
+        // 添加隐藏事件监听器
+        addStockModal.value.addEventListener('hidden.bs.modal', cleanupModalEffects);
+      }
+    } catch (error) {
+      console.error('初始化模态框失败:', error);
+    }
+  };
+  
+  // 清理模态框效果
+  const cleanupModalEffects = () => {
+    // 移除模态框背景
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => {
+      backdrop.classList.remove('show');
+      setTimeout(() => backdrop.remove(), 150);
+    });
+    
+    // 移除body上的modal-open类和内联样式
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    // 重置表单
     newStock.value = {
       market: 'HK',
       code: '',
@@ -780,12 +826,30 @@ onMounted(() => {
       full_name: '',
       current_price: null,
       alertMessage: ''
-    }
-  })
+    };
+  };
+  
+  // 延迟初始化模态框，确保DOM已完全加载
+  setTimeout(initModal, 500);
+  
+  // 添加全局事件监听器
+  window.addEventListener('load', initModal);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  
+  // 移除事件监听器
+  if (addStockModal.value) {
+    addStockModal.value.removeEventListener('hidden.bs.modal', cleanupModalEffects);
+  }
+  
+  // 销毁模态框实例
+  if (stockModalInstance) {
+    stockModalInstance.dispose();
+  }
+  
+  window.removeEventListener('load', initModal);
 })
 
 // 修改动态ref的处理
@@ -1053,8 +1117,7 @@ const handleStockCodeBlur = async (event) => {
           alertMessage: ''
         }
         
-        const modal = new Modal(addStockModal.value)
-        modal.show()
+        showStockModal.value = true
       } else {
         newStock.value = {
           market: 'HK',
@@ -1064,8 +1127,7 @@ const handleStockCodeBlur = async (event) => {
           current_price: null,
           alertMessage: '未找到股票信息，请手动输入股票详情'
         }
-        const modal = new Modal(addStockModal.value)
-        modal.show()
+        showStockModal.value = true
       }
     } catch (error) {
       console.error('搜索股票失败:', error)
@@ -1077,8 +1139,7 @@ const handleStockCodeBlur = async (event) => {
         current_price: null,
         alertMessage: '搜索股票失败，请手动输入股票详情'
       }
-      const modal = new Modal(addStockModal.value)
-      modal.show()
+      showStockModal.value = true
     }
   }, 200)
 }
@@ -1238,35 +1299,10 @@ const submitNewStock = async () => {
       form.value.stock_code = newStock.value.code
       form.value.stock_name = newStock.value.name
       form.value.market = newStock.value.market
+      stockSelected.value = true
       
-      try {
-        if (addStockModal.value) {
-          const modal = Modal.getInstance(addStockModal.value)
-          if (modal) {
-            modal.hide()
-          } else {
-            // 如果无法获取模态框实例，使用原生方法关闭
-            addStockModal.value.classList.remove('show')
-            addStockModal.value.style.display = 'none'
-            document.body.classList.remove('modal-open')
-            const backdrop = document.querySelector('.modal-backdrop')
-            if (backdrop && backdrop.parentNode) {
-              backdrop.parentNode.removeChild(backdrop)
-            }
-          }
-        }
-      } catch (modalError) {
-        console.error('关闭模态框失败:', modalError)
-      }
-      
-      newStock.value = {
-        market: 'HK',
-        code: '',
-        name: '',
-        full_name: '',
-        current_price: null,
-        alertMessage: ''
-      }
+      // 关闭模态框
+      showStockModal.value = false
     } else {
       message.error(response.data.message || '添加股票失败')
       newStock.value.current_price = null
@@ -1281,6 +1317,17 @@ const submitNewStock = async () => {
 
 const handleStockCodeFocus = () => {
   form.value.stock_code = ''
+}
+
+// 修改关闭模态框的逻辑
+const closeStockModal = () => {
+  showStockModal.value = false
+  // 重置表单
+  setTimeout(() => {
+    if (!stockSelected.value) {
+      form.value.stock_code = ''
+    }
+  }, 100)
 }
 </script>
 
@@ -1501,19 +1548,112 @@ const handleStockCodeFocus = () => {
   background-color: #c0c5cb;
 }
 
-/* 添加对话框相关样式 */
-.modal-body {
-  padding: 1rem;
+/* 新的模态框样式 */
+.stock-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
 
-.modal-footer {
-  padding: 0.75rem;
-  border-top: 1px solid #dee2e6;
+.stock-modal {
+  width: 100%;
+  max-width: 500px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.form-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 0.25rem;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stock-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.stock-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.stock-modal-close {
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+}
+
+.stock-modal-body {
+  padding: 20px;
+  position: relative;
+}
+
+.stock-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  gap: 12px;
+}
+
+.btn-primary, .btn-secondary {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 4px;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+
+.btn-primary {
+  color: #fff;
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.btn-primary:hover {
+  background-color: #0069d9;
+  border-color: #0062cc;
+}
+
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  color: #fff;
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+  border-color: #545b62;
 }
 </style> 

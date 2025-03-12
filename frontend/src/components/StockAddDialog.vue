@@ -1,15 +1,15 @@
 <template>
   <teleport to="body">
-    <div v-if="modelValue" class="stock-add-dialog-overlay">
-      <div class="stock-add-dialog-container">
-        <div class="stock-add-dialog-header">
-          <h5 class="stock-add-dialog-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
-          <button type="button" class="stock-add-dialog-close" @click="handleClose">&times;</button>
+    <div v-if="modelValue" class="stock-dialog-backdrop" @click.self="handleClose">
+      <div class="stock-dialog">
+        <div class="stock-dialog-header">
+          <h5 class="stock-dialog-title">{{ editData ? '编辑股票' : '添加新股票' }}</h5>
+          <button type="button" class="stock-dialog-close" @click="handleClose">&times;</button>
         </div>
         
-        <div class="stock-add-dialog-body" v-permission="editData ? 'stock:list:edit' : 'stock:list:add'">
-          <div v-if="isProcessing" class="stock-add-dialog-loading">
-            <div class="spinner"></div>
+        <div class="stock-dialog-body" v-permission="editData ? 'stock:list:edit' : 'stock:list:add'">
+          <div v-if="loading" class="stock-dialog-loading">
+            <div class="stock-dialog-spinner"></div>
             <p>正在查询股票信息...</p>
           </div>
           
@@ -18,45 +18,52 @@
               <label>股票代码</label>
               <input 
                 type="text" 
-                v-model="form.code"
-                :class="{ 'is-invalid': errors.code }"
-                placeholder="输入股票代码后将自动查询股票信息"
-                @keydown.enter.prevent="handleCodeEnter"
-                @keydown.tab.prevent="handleCodeEnter"
-                @blur="handleCodeBlur"
-                :readonly="!!editData"
+                v-model="formData.code"
+                :class="{ 'is-invalid': validationErrors.code }"
+                placeholder="输入股票代码后按回车键查询"
+                @keydown.enter.prevent="handleCodeSearch"
+                :readonly="!!editData || loading"
                 ref="codeInput"
+                :disabled="loading"
               />
-              <div class="error-message" v-if="errors.code">{{ errors.code }}</div>
+              <div class="error-message" v-if="validationErrors.code">{{ validationErrors.code }}</div>
+              <button 
+                v-if="formData.code && !editData && !loading" 
+                type="button" 
+                class="search-button"
+                @click="handleCodeSearch"
+              >
+                查询
+              </button>
             </div>
 
             <div class="form-group">
               <label>市场</label>
               <input 
                 type="text" 
-                v-model="form.market"
-                :class="{ 'is-invalid': errors.market }"
+                v-model="formData.market"
+                :class="{ 'is-invalid': validationErrors.market }"
                 readonly
               />
-              <div class="error-message" v-if="errors.market">{{ errors.market }}</div>
+              <div class="error-message" v-if="validationErrors.market">{{ validationErrors.market }}</div>
             </div>
 
             <div class="form-group">
               <label>股票名称</label>
               <input 
                 type="text" 
-                v-model="form.code_name"
-                :class="{ 'is-invalid': errors.code_name }"
+                v-model="formData.code_name"
+                :class="{ 'is-invalid': validationErrors.code_name }"
                 :readonly="!editData"
               />
-              <div class="error-message" v-if="errors.code_name">{{ errors.code_name }}</div>
+              <div class="error-message" v-if="validationErrors.code_name">{{ validationErrors.code_name }}</div>
             </div>
 
             <div class="form-group">
               <label>谷歌查询代码</label>
               <input 
                 type="text" 
-                v-model="form.google_code"
+                v-model="formData.google_code"
                 :readonly="!editData"
               />
             </div>
@@ -65,30 +72,30 @@
               <label>当前股价</label>
               <input 
                 type="text" 
-                :value="form.current_price"
+                :value="formData.current_price"
                 readonly
               />
-              <div v-if="alertMessage" :class="{ 
-                  'text-danger': alertMessage.includes('已存在'), 
-                  'text-primary': alertMessage.includes('查询失败')
+              <div v-if="statusMessage" :class="{ 
+                  'text-danger': statusMessage.includes('已存在'), 
+                  'text-primary': statusMessage.includes('查询失败')
                 }"
               >
-                {{ alertMessage }}
+                {{ statusMessage }}
               </div>
             </div>
           </form>
         </div>
         
-        <div class="stock-add-dialog-footer">
+        <div class="stock-dialog-footer">
           <button type="button" class="btn-secondary" @click="handleClose">取消</button>
           <button 
             type="button" 
             class="btn-primary" 
             @click="handleSubmit"
-            :disabled="submitting || isProcessing"
+            :disabled="submitting || loading || !isFormValid"
             v-permission="editData ? 'stock:list:edit' : 'stock:list:add'"
           >
-            <span v-if="submitting || isProcessing" class="spinner-sm"></span>
+            <span v-if="submitting" class="spinner-sm"></span>
             {{ editData ? '保存修改' : '确认添加' }}
           </button>
         </div>
@@ -98,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import { useMessage } from '../composables/useMessage'
 
@@ -115,15 +122,14 @@ const message = useMessage()
 
 // 状态变量
 const submitting = ref(false)
-const errors = ref({})
-const alertMessage = ref('')
-const stockSelected = ref(false)
-const isProcessing = ref(false)
-const lastFetchedCode = ref('')
+const loading = ref(false)
+const validationErrors = ref({})
+const statusMessage = ref('')
 const codeInput = ref(null)
+const stockInfoCache = ref({})
 
 // 表单数据
-const form = ref({
+const formData = ref({
   market: '',
   code: '',
   code_name: '',
@@ -131,126 +137,67 @@ const form = ref({
   current_price: null
 })
 
-// 缓存对象
-const stockInfoCache = ref({})
+// 计算属性：表单是否有效
+const isFormValid = computed(() => {
+  return formData.value.code && 
+         formData.value.market && 
+         formData.value.code_name && 
+         !Object.keys(validationErrors.value).length
+})
 
-// 重置表单，保留代码
-const resetFormExceptCode = () => {
-  const currentCode = form.value.code
-  errors.value = {}
-  alertMessage.value = ''
-  
-  form.value = {
-    market: '',
-    code: currentCode,
-    code_name: '',
-    google_code: '',
-    current_price: null
-  }
-}
-
-// 完全重置表单
+// 重置表单
 const resetForm = () => {
-  form.value = {
+  formData.value = {
     market: '',
     code: '',
     code_name: '',
     google_code: '',
     current_price: null
   }
-  errors.value = {}
-  alertMessage.value = ''
-  stockSelected.value = false
-  lastFetchedCode.value = ''
-  stockInfoCache.value = {}
-}
-
-// 处理回车和Tab事件
-const handleCodeEnter = async (event) => {
-  event.preventDefault()
-  
-  if (!form.value.code || isProcessing.value) {
-    return
-  }
-  
-  if (stockSelected.value && form.value.code.trim() === form.value.code) {
-    return
-  }
-  
-  await fetchStockInfo()
-}
-
-// 处理失去焦点事件
-const handleCodeBlur = async () => {
-  // 使用setTimeout确保在所有其他事件处理完成后执行
-  setTimeout(async () => {
-    if (!form.value.code || isProcessing.value || !form.value.code.trim()) {
-      return
-    }
-    
-    if (stockSelected.value && props.editData && form.value.code === props.editData.code) {
-      return
-    }
-    
-    if (stockSelected.value && form.value.code_name) {
-      return
-    }
-    
-    if (lastFetchedCode.value === form.value.code.trim()) {
-      return
-    }
-    
-    await fetchStockInfo()
-  }, 300)
+  validationErrors.value = {}
+  statusMessage.value = ''
 }
 
 // 查询股票信息
-const fetchStockInfo = async () => {
-  if (isProcessing.value) {
+const handleCodeSearch = async () => {
+  const stockCode = formData.value.code.trim()
+  
+  if (!stockCode || loading.value) {
     return
   }
   
-  const stockCode = form.value.code.trim()
-  
-  if (!stockCode) {
-    return
-  }
-  
-  if (lastFetchedCode.value === stockCode) {
-    return
-  }
-  
-  // 设置处理中状态
-  isProcessing.value = true
-  lastFetchedCode.value = stockCode
-  
-  // 使用缓存
+  // 检查缓存
   if (stockInfoCache.value[stockCode]) {
     const cachedData = stockInfoCache.value[stockCode]
     
     if (cachedData.exists) {
-      alertMessage.value = '该股票代码已存在'
-      resetFormExceptCode()
-      isProcessing.value = false
+      statusMessage.value = '该股票代码已存在'
       return
     }
     
-    form.value.current_price = cachedData.price
-    form.value.google_code = cachedData.google_code
-    form.value.code_name = cachedData.code_name
-    form.value.market = cachedData.market
-    stockSelected.value = true
-    isProcessing.value = false
+    formData.value.current_price = cachedData.price
+    formData.value.google_code = cachedData.google_code
+    formData.value.code_name = cachedData.code_name
+    formData.value.market = cachedData.market
     return
   }
   
+  validationErrors.value = {}
+  statusMessage.value = ''
+  loading.value = true
+  
   try {
     // 查询股票信息
-    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(stockCode)}&_t=${Date.now()}`)
+    const timestamp = Date.now()
+    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(stockCode)}&_t=${timestamp}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store'
+      }
+    })
     
-    // 检查对话框是否已关闭或代码已改变
-    if (!props.modelValue || stockCode !== form.value.code.trim()) {
-      isProcessing.value = false
+    // 检查对话框是否已关闭
+    if (!props.modelValue) {
+      loading.value = false
       return
     }
     
@@ -264,12 +211,15 @@ const fetchStockInfo = async () => {
           params: {
             search: stockCode,
             _t: Date.now()
+          },
+          headers: {
+            'Cache-Control': 'no-cache, no-store'
           }
         })
         
-        // 再次检查对话框是否已关闭或代码已改变
-        if (!props.modelValue || stockCode !== form.value.code.trim()) {
-          isProcessing.value = false
+        // 再次检查对话框是否已关闭
+        if (!props.modelValue) {
+          loading.value = false
           return
         }
         
@@ -280,18 +230,17 @@ const fetchStockInfo = async () => {
           
           if (existingStock) {
             stockInfoCache.value[stockCode] = { exists: true }
-            alertMessage.value = '该股票代码已存在'
-            resetFormExceptCode()
-            isProcessing.value = false
+            statusMessage.value = '该股票代码已存在'
+            loading.value = false
             return
           }
         }
 
         // 更新表单数据
-        form.value.current_price = stockData.price
-        form.value.google_code = stockData.query
-        form.value.code_name = stockData.code_name || stockData.name || ''
-        form.value.market = stockData.market
+        formData.value.current_price = stockData.price
+        formData.value.google_code = stockData.query
+        formData.value.code_name = stockData.code_name || stockData.name || ''
+        formData.value.market = stockData.market
         
         // 缓存查询结果
         stockInfoCache.value[stockCode] = {
@@ -302,101 +251,45 @@ const fetchStockInfo = async () => {
           market: stockData.market
         }
         
-        if (form.value.code_name) {
-          stockSelected.value = true
-        } else {
-          errors.value.code_name = '未能获取公司名称'
+        if (!formData.value.code_name) {
+          validationErrors.value.code_name = '未能获取公司名称'
         }
-      } catch (checkError) {
+      } catch (error) {
+        console.error('检查股票是否存在时出错:', error)
         // 即使检查失败，仍然使用查询到的股票信息
-        form.value.current_price = stockData.price
-        form.value.google_code = stockData.query
-        form.value.code_name = stockData.code_name || stockData.name || ''
-        form.value.market = stockData.market
-        stockSelected.value = true
+        formData.value.current_price = stockData.price
+        formData.value.google_code = stockData.query
+        formData.value.code_name = stockData.code_name || stockData.name || ''
+        formData.value.market = stockData.market
       }
     } else {
-      alertMessage.value = '未找到股票信息，请检查股票代码是否正确'
-      resetFormExceptCode()
+      statusMessage.value = '未找到股票信息，请检查股票代码是否正确'
     }
   } catch (error) {
-    alertMessage.value = '查询失败，请检查股票代码是否正确'
-    resetFormExceptCode()
+    console.error('查询股票信息时出错:', error)
+    statusMessage.value = '查询失败，请检查股票代码是否正确'
   } finally {
-    isProcessing.value = false
+    loading.value = false
   }
 }
 
-// 监听股票代码变化
-watch(() => form.value.code, (newCode, oldCode) => {
-  if (!newCode) {
-    resetForm()
-  } else if (stockSelected.value && newCode !== oldCode) {
-    stockSelected.value = false
-    lastFetchedCode.value = ''
-  }
-}, { flush: 'post' })
-
-// 监听模态框显示状态
-watch(() => props.modelValue, (newValue) => {
-  if (newValue) {
-    isProcessing.value = false
-    lastFetchedCode.value = ''
-    
-    if (!props.editData) {
-      nextTick(() => {
-        if (codeInput.value) {
-          codeInput.value.focus()
-        }
-      })
-    }
-    
-    document.body.style.overflow = 'hidden'
-  } else {
-    resetForm()
-    document.body.style.overflow = ''
-  }
-})
-
-// 监听 editData 变化
-watch(() => props.editData, (newData) => {
-  if (newData) {
-    form.value = {
-      code: newData.code,
-      market: newData.market,
-      code_name: newData.code_name,
-      google_code: newData.google_name,
-      current_price: newData.current_price
-    }
-    stockSelected.value = true
-    lastFetchedCode.value = newData.code
-  } else {
-    resetForm()
-  }
-}, { immediate: true })
-
 // 表单验证
 const validateForm = () => {
-  errors.value = {}
+  validationErrors.value = {}
   let isValid = true
 
-  if (!form.value.code || !form.value.code.trim()) {
-    errors.value.code = '请输入股票代码'
+  if (!formData.value.code || !formData.value.code.trim()) {
+    validationErrors.value.code = '请输入股票代码'
     isValid = false
   }
 
-  if (!form.value.market || !form.value.market.trim()) {
-    errors.value.market = '请选择市场'
+  if (!formData.value.market || !formData.value.market.trim()) {
+    validationErrors.value.market = '请选择市场'
     isValid = false
   }
 
-  if (!form.value.code_name || !form.value.code_name.trim()) {
-    errors.value.code_name = '请输入股票名称'
-    isValid = false
-  }
-
-  if (!form.value.google_code || !form.value.google_code.trim()) {
-    errors.value.google_code = '请输入谷歌查询代码'
+  if (!formData.value.code_name || !formData.value.code_name.trim()) {
+    validationErrors.value.code_name = '请输入股票名称'
     isValid = false
   }
 
@@ -410,21 +303,17 @@ const handleClose = () => {
 
 // 提交表单
 const handleSubmit = async () => {
-  if (!validateForm() || submitting.value || isProcessing.value) return
+  if (!validateForm() || submitting.value || loading.value) return
   
   try {
     submitting.value = true
     
-    if (!form.value.code_name || !form.value.code_name.trim()) {
-      throw new Error('股票名称不能为空')
-    }
-    
     const stock = {
-      code: form.value.code.trim(),
-      market: form.value.market.trim(),
-      code_name: form.value.code_name.trim(),
-      google_name: form.value.google_code.trim(),
-      currency: form.value.market === 'HK' ? 'HKD' : 'USD'
+      code: formData.value.code.trim(),
+      market: formData.value.market.trim(),
+      code_name: formData.value.code_name.trim(),
+      google_name: formData.value.google_code.trim(),
+      currency: formData.value.market === 'HK' ? 'HKD' : 'USD'
     }
     
     const url = props.editData ? `/api/stock/stocks/${props.editData.id}` : '/api/stock/stocks'
@@ -433,7 +322,8 @@ const handleSubmit = async () => {
     const response = await axios[method](url, stock, {
       headers: {
         'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        'Cache-Control': 'no-cache, no-store'
       }
     })
     
@@ -445,12 +335,40 @@ const handleSubmit = async () => {
       throw new Error(response.data.message || '操作失败')
     }
   } catch (error) {
+    console.error('提交表单时出错:', error)
     message.error(error.message || '操作失败，请重试')
-    errors.value.code_name = error.message
+    validationErrors.value.code_name = error.message
   } finally {
     submitting.value = false
   }
 }
+
+// 监听模态框显示状态
+watch(() => props.modelValue, (newValue) => {
+  if (newValue) {
+    resetForm()
+    
+    if (props.editData) {
+      formData.value = {
+        code: props.editData.code,
+        market: props.editData.market,
+        code_name: props.editData.code_name,
+        google_code: props.editData.google_name,
+        current_price: props.editData.current_price
+      }
+    } else {
+      nextTick(() => {
+        if (codeInput.value) {
+          codeInput.value.focus()
+        }
+      })
+    }
+    
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+  }
+})
 
 // 添加键盘事件监听
 onMounted(() => {
@@ -462,14 +380,16 @@ onMounted(() => {
   
   document.addEventListener('keydown', handleKeyDown)
   
-  return () => {
+  // 清理函数
+  onBeforeUnmount(() => {
     document.removeEventListener('keydown', handleKeyDown)
-  }
+    document.body.style.overflow = ''
+  })
 })
 </script>
 
 <style scoped>
-.stock-add-dialog-overlay {
+.stock-dialog-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -482,16 +402,22 @@ onMounted(() => {
   z-index: 9999;
 }
 
-.stock-add-dialog-container {
+.stock-dialog {
   width: 100%;
   max-width: 500px;
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   overflow: hidden;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.stock-add-dialog-header {
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stock-dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -499,14 +425,14 @@ onMounted(() => {
   border-bottom: 1px solid #eee;
 }
 
-.stock-add-dialog-title {
+.stock-dialog-title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: #333;
 }
 
-.stock-add-dialog-close {
+.stock-dialog-close {
   background: transparent;
   border: 0;
   font-size: 24px;
@@ -515,11 +441,12 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.stock-add-dialog-body {
+.stock-dialog-body {
   padding: 20px;
+  position: relative;
 }
 
-.stock-add-dialog-loading {
+.stock-dialog-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -527,7 +454,7 @@ onMounted(() => {
   padding: 40px 0;
 }
 
-.spinner {
+.stock-dialog-spinner {
   width: 40px;
   height: 40px;
   border: 4px solid rgba(0, 123, 255, 0.1);
@@ -552,7 +479,7 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
-.stock-add-dialog-footer {
+.stock-dialog-footer {
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px;
@@ -562,6 +489,7 @@ onMounted(() => {
 
 .form-group {
   margin-bottom: 16px;
+  position: relative;
 }
 
 .form-group label {
@@ -598,6 +526,28 @@ onMounted(() => {
 
 .form-group input.is-invalid {
   border-color: #dc3545;
+}
+
+.form-group input:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.search-button {
+  position: absolute;
+  right: 8px;
+  top: 32px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.search-button:hover {
+  background-color: #0069d9;
 }
 
 .error-message {
