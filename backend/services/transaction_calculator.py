@@ -133,10 +133,18 @@ class TransactionCalculator:
                 logger.error("处理交易记录失败: holder_id不能为空")
                 return False, {'message': '处理交易记录失败: holder_id不能为空'}
             
-            # 确保transaction_data中包含user_id，如果没有则使用holder_id
+            # 确保transaction_data中包含user_id，如果没有则查询holder对应的user_id
             if 'user_id' not in transaction_data or not transaction_data['user_id']:
-                transaction_data['user_id'] = holder_id
-                logger.info(f"transaction_data中未找到user_id，使用holder_id: {holder_id}")
+                # 查询holder对应的user_id
+                holder_query = "SELECT user_id FROM holders WHERE id = %s"
+                holder = db_conn.fetch_one(holder_query, [holder_id])
+                
+                if holder and holder['user_id']:
+                    transaction_data['user_id'] = holder['user_id']
+                    logger.info(f"transaction_data中未找到user_id，从holder获取: holder_id={holder_id}, user_id={holder['user_id']}")
+                else:
+                    logger.error(f"无法从holder获取user_id: holder_id={holder_id}")
+                    return False, {'message': f'无法从holder获取user_id: holder_id={holder_id}'}, 400
             
             # 验证交易数据（除删除操作外）
             if operation_type != 'delete':
@@ -304,130 +312,99 @@ class TransactionCalculator:
         position_change: Dict[str, Any],
         holder_id: Optional[int] = None
     ) -> Tuple[bool, Dict[str, Any]]:
-        """处理新增交易"""
+        """处理添加交易"""
         try:
-            # 获取用户ID
+            # 记录详细的交易数据，用于调试
+            logger.info(f"处理添加交易: data={transaction_data}, position_change={position_change}, holder_id={holder_id}")
+            
+            # 获取交易数据
             user_id = transaction_data.get('user_id')
-            if not user_id:
-                logger.error("缺少用户ID")
-                return False, {"message": "缺少用户ID"}
-            
-            # 获取交易类型
-            transaction_type = transaction_data.get('transaction_type', '').lower()
-            if not transaction_type or transaction_type not in ['buy', 'sell']:
-                logger.error(f"无效的交易类型: {transaction_type}")
-                return False, {"message": f"无效的交易类型: {transaction_type}"}
-            
-            # 获取交易日期
-            transaction_date = transaction_data.get('transaction_date')
-            if not transaction_date:
-                logger.error("缺少交易日期")
-                return False, {"message": "缺少交易日期"}
-            
-            # 获取股票代码和市场
             stock_code = transaction_data.get('stock_code')
             market = transaction_data.get('market')
-            if not stock_code or not market:
-                logger.error("缺少股票代码或市场")
-                return False, {"message": "缺少股票代码或市场"}
+            transaction_type = transaction_data.get('transaction_type', '').lower()
+            transaction_date = transaction_data.get('transaction_date')
+            total_quantity = float(transaction_data.get('total_quantity', 0))
+            total_amount = float(transaction_data.get('total_amount', 0))
+            broker_fee = float(transaction_data.get('broker_fee', 0))
+            stamp_duty = float(transaction_data.get('stamp_duty', 0))
+            transaction_levy = float(transaction_data.get('transaction_levy', 0))
+            trading_fee = float(transaction_data.get('trading_fee', 0))
+            deposit_fee = float(transaction_data.get('deposit_fee', 0))
+            transaction_code = transaction_data.get('transaction_code', '')
             
-            # 获取交易数量和金额
-            total_quantity = float(transaction_data.get('total_quantity', 0) or 0)
-            total_amount = float(transaction_data.get('total_amount', 0) or 0)
-            if total_quantity <= 0:
-                logger.error(f"无效的交易数量: {total_quantity}")
-                return False, {"message": f"无效的交易数量: {total_quantity}"}
+            # 检查持有人ID是否存在
+            if holder_id:
+                holder_query = "SELECT id, name FROM holders WHERE id = %s"
+                holder = db_conn.fetch_one(holder_query, [holder_id])
+                
+                if not holder:
+                    logger.error(f"未找到持有人信息: holder_id={holder_id}")
+                    
+                    # 尝试获取用户的默认持有人
+                    default_holder_query = "SELECT id, name FROM holders WHERE user_id = %s LIMIT 1"
+                    default_holder = db_conn.fetch_one(default_holder_query, [user_id])
+                    
+                    if default_holder:
+                        logger.info(f"找到用户的默认持有人: id={default_holder['id']}, name={default_holder['name']}")
+                        holder_id = default_holder['id']
+                    else:
+                        # 如果没有默认持有人，创建一个
+                        logger.info(f"为用户 {user_id} 创建默认持有人")
+                        create_holder_sql = """
+                            INSERT INTO holders (user_id, name, type, status, created_at, updated_at)
+                            VALUES (%s, %s, 'individual', 1, NOW(), NOW())
+                        """
+                        new_holder_name = f"默认持有人-{user_id}"
+                        db_conn.execute(create_holder_sql, [user_id, new_holder_name])
+                        
+                        # 获取新创建的持有人ID
+                        new_holder_sql = """
+                            SELECT id FROM holders
+                            WHERE user_id = %s
+                            ORDER BY id DESC
+                            LIMIT 1
+                        """
+                        new_holder = db_conn.fetch_one(new_holder_sql, [user_id])
+                        if new_holder:
+                            holder_id = new_holder['id']
+                            logger.info(f"创建了新的默认持有人: id={holder_id}, name={new_holder_name}")
+                        else:
+                            logger.error(f"创建默认持有人失败")
             
-            # 检查是否已存在相同的交易记录
-            check_duplicate_sql = """
-                SELECT id FROM stock_transactions
-                WHERE transaction_code = %s
-                LIMIT 1
-            """
-            
-            check_params = [
-                transaction_data.get('transaction_code', '')
-            ]
-            
-            # 只有当交易编号不为空时才检查重复
-            if transaction_data.get('transaction_code', ''):
-                existing_transaction = db_conn.fetch_one(check_duplicate_sql, check_params)
-                if existing_transaction:
-                    logger.warning(f"已存在相同的交易编号: ID={existing_transaction['id']}, 交易编号={transaction_data.get('transaction_code', '')}")
-                    return False, {"message": f"已存在相同的交易编号，请勿重复添加", "id": existing_transaction['id']}
-            
-            # 计算交易费用
-            broker_fee = float(transaction_data.get('broker_fee', 0) or 0)
-            stamp_duty = float(transaction_data.get('stamp_duty', 0) or 0)
-            transaction_levy = float(transaction_data.get('transaction_levy', 0) or 0)
-            trading_fee = float(transaction_data.get('trading_fee', 0) or 0)
-            deposit_fee = float(transaction_data.get('deposit_fee', 0) or 0)
-            
+            # 计算总费用
             total_fees = broker_fee + stamp_duty + transaction_levy + trading_fee + deposit_fee
             
             # 计算净金额
+            net_amount = total_amount
             if transaction_type == 'buy':
-                net_amount = total_amount + total_fees
-            else:  # sell
-                net_amount = total_amount - total_fees
-            
-            # 获取当前时间
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # 设置running_quantity和running_cost为current_quantity和current_cost
-            running_quantity = position_change.get('current_quantity', 0)
-            running_cost = position_change.get('current_cost', 0)
+                net_amount += total_fees  # 买入时，净金额 = 总金额 + 总费用
+            else:
+                net_amount -= total_fees  # 卖出时，净金额 = 总金额 - 总费用
             
             # 计算平均价格
             avg_price = 0
             if total_quantity > 0:
-                avg_price = abs(total_amount) / total_quantity
+                avg_price = total_amount / total_quantity
             
-            # 构建插入SQL
-            insert_sql = """
-                INSERT INTO stock_transactions (
-                    user_id, transaction_date, stock_code, market,
-                    transaction_type, transaction_code, total_quantity,
-                    total_amount, broker_fee, transaction_levy,
-                    stamp_duty, trading_fee, deposit_fee,
-                    total_fees, net_amount,
-                    created_at, updated_at, has_splits, avg_price
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
+            # 获取当前时间
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 插入交易记录
+            sql = """
+                INSERT INTO stock_transactions
+                (user_id, transaction_code, stock_code, market, transaction_type, transaction_date,
+                total_amount, total_quantity, broker_fee, stamp_duty, transaction_levy, trading_fee,
+                deposit_fee, total_fees, net_amount, created_at, updated_at, avg_price)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            
-            # 准备参数
             params = [
-                user_id,
-                transaction_date,
-                stock_code,
-                market,
-                transaction_type,
-                transaction_data.get('transaction_code', ''),
-                total_quantity,
-                total_amount,
-                broker_fee,
-                transaction_levy,
-                stamp_duty,
-                trading_fee,
-                deposit_fee,
-                float(position_change.get('total_fees', 0)),
-                float(position_change.get('net_amount', 0)),
-                current_time,
-                current_time,
-                0,  # has_splits初始为0
-                float(position_change.get('avg_price', 0))
+                user_id, transaction_code, stock_code, market, transaction_type, transaction_date,
+                total_amount, total_quantity, broker_fee, stamp_duty, transaction_levy, trading_fee,
+                deposit_fee, total_fees, net_amount, current_time, current_time, avg_price
             ]
             
             # 执行插入
-            transaction_id = db_conn.insert(insert_sql, params)
-            
-            if not transaction_id:
-                logger.error("插入交易记录失败")
-                return False, {"message": "插入交易记录失败"}
-            
+            transaction_id = db_conn.insert(sql, params)
             logger.info(f"插入交易记录成功，ID: {transaction_id}")
             
             # 处理交易明细
@@ -1720,12 +1697,57 @@ class TransactionCalculator:
         if 'transaction_date' in transaction and transaction['transaction_date'] is not None:
             try:
                 if isinstance(transaction['transaction_date'], str):
-                    datetime.strptime(transaction['transaction_date'], '%Y-%m-%d')
+                    # 尝试多种日期格式
+                    date_str = transaction['transaction_date']
+                    parsed_date = None
+                    
+                    # 尝试标准格式 YYYY-MM-DD
+                    try:
+                        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    except ValueError:
+                        pass
+                    
+                    # 尝试GMT格式 Thu, 27 Feb 2025 00:00:00 GMT
+                    if not parsed_date:
+                        try:
+                            from email.utils import parsedate_to_datetime
+                            parsed_date = parsedate_to_datetime(date_str)
+                        except Exception:
+                            pass
+                    
+                    # 尝试其他常见格式
+                    formats = [
+                        '%Y/%m/%d',
+                        '%d/%m/%Y',
+                        '%m/%d/%Y',
+                        '%d-%m-%Y',
+                        '%m-%d-%Y',
+                        '%Y.%m.%d',
+                        '%d.%m.%Y',
+                        '%m.%d.%Y',
+                        '%a, %d %b %Y %H:%M:%S %Z'  # RFC 2822 格式
+                    ]
+                    
+                    for fmt in formats:
+                        if not parsed_date:
+                            try:
+                                parsed_date = datetime.strptime(date_str, fmt)
+                            except ValueError:
+                                continue
+                    
+                    if not parsed_date:
+                        errors.append('交易日期格式错误，无法解析')
+                        logger.error(f"交易日期格式错误，无法解析: {date_str}")
+                    else:
+                        # 将解析后的日期转换为YYYY-MM-DD格式并更新transaction_data
+                        transaction['transaction_date'] = parsed_date.strftime('%Y-%m-%d')
+                        logger.info(f"日期格式已转换: {date_str} -> {transaction['transaction_date']}")
+                        
                 elif not isinstance(transaction['transaction_date'], datetime):
-                    errors.append('交易日期格式错误，应为 YYYY-MM-DD 或 datetime 对象')
+                    errors.append('交易日期格式错误，应为日期字符串或 datetime 对象')
                     logger.error(f"交易日期格式错误: {transaction['transaction_date']}")
             except Exception as e:
-                errors.append('交易日期格式错误，应为 YYYY-MM-DD')
+                errors.append('交易日期格式错误')
                 logger.error(f"交易日期格式错误: {transaction['transaction_date']}, 错误: {str(e)}")
         
         # 验证股票代码和市场
@@ -1761,4 +1783,4 @@ class TransactionCalculator:
         else:
             logger.info("交易数据验证通过")
             
-        return errors 
+        return errors

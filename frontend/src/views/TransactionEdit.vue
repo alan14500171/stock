@@ -270,7 +270,7 @@ const loadTransaction = async () => {
         : [{ quantity: transaction.total_quantity, price: transaction.total_amount / transaction.total_quantity }],
       broker_fee: transaction.broker_fee || 0,
       transaction_levy: transaction.transaction_levy || 0,
-      stamp_duty: transaction.stamp_duty || 0,
+      stamp_duty: transaction.transaction_type.toLowerCase() === 'buy' ? 0 : (transaction.stamp_duty || 0),
       trading_fee: transaction.trading_fee || 0,
       deposit_fee: transaction.deposit_fee || 0,
       market: transaction.market,
@@ -281,6 +281,11 @@ const loadTransaction = async () => {
       current_cost: transaction.current_cost || 0,
       current_avg_cost: transaction.current_avg_cost || 0
     }
+    
+    console.log('加载的交易数据:', {
+      交易类型: form.value.transaction_type,
+      印花税: form.value.stamp_duty
+    })
   } catch (error) {
     showToast(error.message || '加载交易记录失败，请稍后重试', 'danger')
     throw error

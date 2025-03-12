@@ -30,12 +30,46 @@ class TransactionService:
             db.execute("START TRANSACTION")
             
             try:
+                # 获取用户的默认持有人ID
+                holder_id = None
+                default_holder_query = "SELECT id FROM holders WHERE user_id = %s LIMIT 1"
+                default_holder = db.fetch_one(default_holder_query, [user_id])
+                
+                if default_holder:
+                    holder_id = default_holder['id']
+                    logger.info(f"找到用户的默认持有人: id={holder_id}")
+                else:
+                    # 如果没有默认持有人，创建一个
+                    logger.info(f"为用户 {user_id} 创建默认持有人")
+                    create_holder_sql = """
+                        INSERT INTO holders (user_id, name, type, status, created_at, updated_at)
+                        VALUES (%s, %s, 'individual', 1, NOW(), NOW())
+                    """
+                    new_holder_name = f"默认持有人-{user_id}"
+                    db.execute(create_holder_sql, [user_id, new_holder_name])
+                    
+                    # 获取新创建的持有人ID
+                    new_holder_sql = """
+                        SELECT id FROM holders
+                        WHERE user_id = %s
+                        ORDER BY id DESC
+                        LIMIT 1
+                    """
+                    new_holder = db.fetch_one(new_holder_sql, [user_id])
+                    if new_holder:
+                        holder_id = new_holder['id']
+                        logger.info(f"创建了新的默认持有人: id={holder_id}")
+                    else:
+                        logger.error(f"创建默认持有人失败")
+                        db.execute("ROLLBACK")
+                        return False, {'message': '创建默认持有人失败'}, 500
+                
                 # 使用统一计算模块处理交易
                 success, result = TransactionCalculator.process_transaction(
                     db_conn=db,
                     transaction_data=transaction_data,
                     operation_type='delete' if is_delete else 'edit' if transaction_id else 'add',
-                    holder_id=user_id,
+                    holder_id=holder_id,  # 使用获取到的持有人ID，而不是用户ID
                     original_transaction_id=transaction_id
                 )
                 
@@ -53,7 +87,7 @@ class TransactionService:
                         stock_code=transaction_data['stock_code'],
                         market=transaction_data['market'],
                         start_date=transaction_data['transaction_date'],
-                        holder_id=user_id
+                        holder_id=holder_id  # 使用获取到的持有人ID，而不是用户ID
                     )
                 except Exception as e:
                     logger.error(f"重新计算后续交易记录失败: {str(e)}")

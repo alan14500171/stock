@@ -16,6 +16,8 @@ from routes.user import user_bp
 from routes.role import role_bp
 from routes.permission import permission_bp
 from routes.transaction_split import transaction_split_bp
+from routes.transaction import transaction_bp
+from routes.transaction_detail import transaction_detail_bp
 from routes.holder import holder_bp
 
 # 设置日志
@@ -85,8 +87,10 @@ def create_app():
     app.register_blueprint(role_bp, url_prefix='/api/system/role')
     app.register_blueprint(permission_bp, url_prefix='/api/system/permission')
     
-    # 注册交易分单蓝图
+    # 注册交易相关蓝图
+    app.register_blueprint(transaction_bp)
     app.register_blueprint(transaction_split_bp)
+    app.register_blueprint(transaction_detail_bp)
     
     # 注册持有人管理蓝图
     app.register_blueprint(holder_bp)
