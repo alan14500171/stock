@@ -18,7 +18,7 @@ services:
       - DB_HOST=mysql-container
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=Zxc000123
+      - DB_PASSWORD=your_password_here
       - DB_NAME=stock
       - DB_CHARSET=utf8mb4
       - DB_CONNECT_RETRY=5
@@ -66,10 +66,10 @@ services:
     container_name: mysql-container
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=Zxc000123
+      - MYSQL_ROOT_PASSWORD=your_password_here
       - MYSQL_DATABASE=stock
       - MYSQL_USER=stockuser
-      - MYSQL_PASSWORD=stockpassword
+      - MYSQL_PASSWORD=your_password_here
     ports:
       - "3306:3306"
     volumes:
@@ -79,7 +79,7 @@ services:
       - stock-network
     mem_limit: 512M
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pZxc000123"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pyour_password_here"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -91,4 +91,4 @@ networks:
 
 volumes:
   mysql_data:
-    driver: local
+    driver: local 

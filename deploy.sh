@@ -26,6 +26,15 @@ fi
 echo -e "${YELLOW}停止并删除现有容器...${NC}"
 docker-compose down
 
+# 确保mysql-container在stock-network网络中
+echo -e "${YELLOW}确保MySQL容器在正确的网络中...${NC}"
+if docker network inspect stock-network &> /dev/null; then
+    echo -e "${GREEN}stock-network网络已存在${NC}"
+else
+    echo -e "${YELLOW}创建stock-network网络...${NC}"
+    docker network create stock-network
+fi
+
 # 构建新镜像
 echo -e "${YELLOW}构建新镜像...${NC}"
 docker-compose build
@@ -34,9 +43,21 @@ docker-compose build
 echo -e "${YELLOW}启动容器...${NC}"
 docker-compose up -d
 
+# 等待容器启动
+echo -e "${YELLOW}等待容器启动...${NC}"
+sleep 10
+
 # 检查容器状态
 echo -e "${YELLOW}检查容器状态...${NC}"
 docker-compose ps
+
+# 检查后端日志
+echo -e "${YELLOW}检查后端日志...${NC}"
+docker logs stock-backend | tail -n 20
+
+# 检查前端日志
+echo -e "${YELLOW}检查前端日志...${NC}"
+docker logs stock-frontend | tail -n 20
 
 echo -e "${GREEN}部署完成!${NC}"
 echo "前端访问地址: http://localhost:9009"

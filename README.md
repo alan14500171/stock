@@ -124,6 +124,29 @@ npm run dev
 
 ## 部署说明
 
+### 配置文件设置
+
+在部署前，您需要创建以下配置文件：
+
+1. 从示例文件创建数据库配置：
+```bash
+cp backend/config/db_config.example.py backend/config/db_config.py
+```
+
+2. 从示例文件创建环境变量配置：
+```bash
+cp .env.example .env
+```
+
+3. 从示例文件创建Docker Compose配置：
+```bash
+cp docker-compose.yml.example docker-compose.yml
+```
+
+4. 根据您的环境修改这些配置文件中的敏感信息，如数据库密码等。
+
+> **注意**：为了安全起见，这些包含敏感信息的配置文件不应该提交到Git仓库中。
+
 ### 整体部署
 
 使用以下命令一键部署整个应用：
