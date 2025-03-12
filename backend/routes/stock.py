@@ -472,6 +472,10 @@ def edit_stock(id):
                 'message': '股票不存在'
             }), 404
             
+        # 保存原始股票信息，用于后续更新交易分单记录
+        old_code = stock_data['code']
+        old_market = stock_data['market']
+        
         stock = Stock(stock_data)
         stock.code = data['code']
         stock.market = data['market']
@@ -481,9 +485,47 @@ def edit_stock(id):
         stock.currency = data.get('currency')
         
         if stock.save():
+            # 同步更新transaction_splits表中的股票信息
+            try:
+                update_splits_sql = """
+                    UPDATE transaction_splits
+                    SET stock_code = %s,
+                        stock_name = %s,
+                        market = %s,
+                        updated_at = NOW()
+                    WHERE stock_code = %s AND market = %s
+                """
+                db.execute(update_splits_sql, (
+                    stock.code,
+                    stock.code_name,
+                    stock.market,
+                    old_code,
+                    old_market
+                ))
+                
+                # 同步更新stock_transactions表中的股票信息
+                update_transactions_sql = """
+                    UPDATE stock_transactions
+                    SET stock_code = %s,
+                        market = %s,
+                        updated_at = NOW()
+                    WHERE stock_code = %s AND market = %s
+                """
+                db.execute(update_transactions_sql, (
+                    stock.code,
+                    stock.market,
+                    old_code,
+                    old_market
+                ))
+                
+                logger.info(f"股票信息同步更新成功: 从 {old_code}/{old_market} 到 {stock.code}/{stock.market}")
+            except Exception as e:
+                logger.error(f"更新交易分单记录的股票信息失败: {str(e)}")
+                # 不影响主股票更新结果
+            
             return jsonify({
                 'success': True,
-                'message': '股票更新成功',
+                'message': '股票更新成功，相关交易记录已同步更新',
                 'data': stock.to_dict()
             })
         else:

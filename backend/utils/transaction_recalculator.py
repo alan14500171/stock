@@ -49,29 +49,11 @@ def get_transaction_splits(holder_id=None, stock_code=None, market=None, start_d
         params = []
         
         if transaction_id:
-            # 获取指定交易的信息，用于确定后续查询条件
-            cursor.execute("""
-                SELECT holder_id, market, stock_code, transaction_date 
-                FROM transaction_splits 
-                WHERE id = %s
-            """, [transaction_id])
-            transaction = cursor.fetchone()
+            # 当提供transaction_id时，直接查询与该original_transaction_id相关的所有分单记录
+            where_clauses.append("ts.original_transaction_id = %s")
+            params.append(transaction_id)
             
-            if not transaction:
-                logger.error(f"未找到ID为 {transaction_id} 的交易记录")
-                return []
-            
-            # 使用该交易的信息查询同一持有人同一股票在该日期及之后的所有交易
-            where_clauses.append("ts.holder_id = %s")
-            where_clauses.append("ts.market = %s")
-            where_clauses.append("ts.stock_code = %s")
-            where_clauses.append("(ts.transaction_date >= %s)")
-            params.extend([
-                transaction['holder_id'], 
-                transaction['market'], 
-                transaction['stock_code'], 
-                transaction['transaction_date']
-            ])
+            logger.info(f"查询original_transaction_id为 {transaction_id} 的交易分单记录")
         else:
             # 根据提供的筛选条件构建查询
             if holder_id:
@@ -321,7 +303,7 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
         logger.info(f"只处理 {start_date} 及之后的记录")
     
     if transaction_id:
-        logger.info(f"只处理交易ID为 {transaction_id} 及其后续交易")
+        logger.info(f"只处理交易ID为 {transaction_id} 的分单记录")
     
     # 获取交易分单记录
     splits = get_transaction_splits(holder_id, stock_code, market, start_date, transaction_id)
@@ -359,36 +341,36 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
         )
         
         # 初始化持仓状态
-        running_quantity = prev_state.get('quantity', 0)
-        running_cost = prev_state.get('cost', 0)
+        running_quantity = decimal.Decimal(str(prev_state.get('quantity', 0)))
+        running_cost = decimal.Decimal(str(prev_state.get('cost', 0)))
         
         # 批量更新缓存
         batch_updates = []
-        batch_size = 100  # 每100条记录批量提交一次
+        batch_size = 100
         
         # 处理每条交易分单记录
         for split in group_splits:
             total_count += 1
             
             try:
-                # 获取交易数据
+                # 获取交易数据并确保所有数值都是decimal.Decimal类型
                 transaction_type = split['transaction_type'].lower()
-                total_quantity = float(split['total_quantity'])
-                total_amount = float(split['total_amount'])
+                total_quantity = decimal.Decimal(str(split['total_quantity']))
+                total_amount = decimal.Decimal(str(split['total_amount']))
                 
-                # 计算总费用
-                total_fees = (
-                    float(split.get('broker_fee', 0) or 0) +
-                    float(split.get('stamp_duty', 0) or 0) +
-                    float(split.get('transaction_levy', 0) or 0) +
-                    float(split.get('trading_fee', 0) or 0) +
-                    float(split.get('deposit_fee', 0) or 0)
-                )
+                # 计算总费用，确保所有数值都是decimal.Decimal类型
+                broker_fee = decimal.Decimal(str(split.get('broker_fee', 0) or 0))
+                stamp_duty = decimal.Decimal(str(split.get('stamp_duty', 0) or 0))
+                transaction_levy = decimal.Decimal(str(split.get('transaction_levy', 0) or 0))
+                trading_fee = decimal.Decimal(str(split.get('trading_fee', 0) or 0))
+                deposit_fee = decimal.Decimal(str(split.get('deposit_fee', 0) or 0))
+                
+                total_fees = broker_fee + stamp_duty + transaction_levy + trading_fee + deposit_fee
                 
                 # 计算交易前状态
                 prev_quantity = running_quantity
                 prev_cost = running_cost
-                prev_avg_cost = prev_cost / prev_quantity if prev_quantity > 0 else 0
+                prev_avg_cost = prev_cost / prev_quantity if prev_quantity > 0 else decimal.Decimal('0')
                 
                 # 计算交易后状态
                 if transaction_type == 'buy':
@@ -399,15 +381,15 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
                     current_cost = prev_cost + buy_cost_with_fees
                     
                     # 计算新的平均成本（包含费用）
-                    current_avg_cost = current_cost / current_quantity if current_quantity > 0 else 0
+                    current_avg_cost = current_cost / current_quantity if current_quantity > 0 else decimal.Decimal('0')
                     
                     # 更新累计状态
                     running_quantity = current_quantity
                     running_cost = current_cost
                     
                     # 买入没有已实现盈亏
-                    realized_profit = 0
-                    profit_rate = 0
+                    realized_profit = decimal.Decimal('0')
+                    profit_rate = decimal.Decimal('0')
                     
                     # 计算净金额 - 买入是负数（支出）
                     net_amount = -(total_amount + total_fees)
@@ -415,8 +397,8 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
                     current_quantity = prev_quantity - total_quantity
                     
                     # 计算已实现盈亏
-                    realized_profit = 0
-                    profit_rate = 0
+                    realized_profit = decimal.Decimal('0')
+                    profit_rate = decimal.Decimal('0')
                     
                     if prev_quantity > 0 and prev_avg_cost > 0:
                         # 卖出收入 - 买入成本（包含费用的平均成本） - 卖出费用
@@ -425,16 +407,16 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
                         
                         # 计算盈亏率
                         if buy_cost > 0:
-                            profit_rate = (realized_profit / buy_cost) * 100
+                            profit_rate = (realized_profit / buy_cost) * decimal.Decimal('100')
                     
                     # 计算剩余成本
                     if prev_quantity > 0:
-                        current_cost = prev_cost * (current_quantity / prev_quantity) if current_quantity > 0 else 0
+                        current_cost = prev_cost * (current_quantity / prev_quantity) if current_quantity > 0 else decimal.Decimal('0')
                     else:
-                        current_cost = 0
+                        current_cost = decimal.Decimal('0')
                     
                     # 更新平均成本
-                    current_avg_cost = current_cost / current_quantity if current_quantity > 0 else 0
+                    current_avg_cost = current_cost / current_quantity if current_quantity > 0 else decimal.Decimal('0')
                     
                     # 更新累计状态
                     running_quantity = current_quantity
@@ -445,18 +427,18 @@ def recalculate_transaction_splits(holder_id=None, stock_code=None, market=None,
                 
                 # 更新字段
                 updated_fields = {
-                    'prev_quantity': prev_quantity,
-                    'prev_cost': prev_cost,
-                    'prev_avg_cost': prev_avg_cost,
-                    'current_quantity': current_quantity,
-                    'current_cost': current_cost,
-                    'current_avg_cost': current_avg_cost,
-                    'total_fees': total_fees,
-                    'net_amount': net_amount,
-                    'running_quantity': running_quantity,
-                    'running_cost': running_cost,
-                    'realized_profit': realized_profit,
-                    'profit_rate': profit_rate
+                    'prev_quantity': float(prev_quantity),
+                    'prev_cost': float(prev_cost),
+                    'prev_avg_cost': float(prev_avg_cost),
+                    'current_quantity': float(current_quantity),
+                    'current_cost': float(current_cost),
+                    'current_avg_cost': float(current_avg_cost),
+                    'total_fees': float(total_fees),
+                    'net_amount': float(net_amount),
+                    'running_quantity': float(running_quantity),
+                    'running_cost': float(running_cost),
+                    'realized_profit': float(realized_profit),
+                    'profit_rate': float(profit_rate)
                 }
                 
                 # 添加到批量更新列表
