@@ -466,8 +466,8 @@ def get_holding_stocks_api():
             avg_cost_params = [user_id]
             
         avg_cost_sql += """
-              AND ts_last.market = ts.market
-              AND ts_last.stock_code = ts.stock_code
+              AND ts_last.market COLLATE utf8mb4_unicode_ci = s.market COLLATE utf8mb4_unicode_ci
+              AND ts_last.stock_code COLLATE utf8mb4_unicode_ci = s.code COLLATE utf8mb4_unicode_ci
               AND UPPER(ts_last.transaction_type) = 'BUY'
             ORDER BY ts_last.transaction_date DESC, ts_last.id DESC
             LIMIT 1
@@ -585,8 +585,8 @@ def refresh_stock_prices():
             avg_cost_params = [user_id]
             
         avg_cost_sql += """
-                      AND ts_last.market = s.market
-                      AND ts_last.stock_code = s.code
+                      AND ts_last.market COLLATE utf8mb4_unicode_ci = s.market COLLATE utf8mb4_unicode_ci
+                      AND ts_last.stock_code COLLATE utf8mb4_unicode_ci = s.code COLLATE utf8mb4_unicode_ci
                       AND UPPER(ts_last.transaction_type) = 'BUY'
                     ORDER BY ts_last.transaction_date DESC, ts_last.id DESC
                     LIMIT 1
@@ -727,8 +727,8 @@ def refresh_stock_prices():
                             FROM stock.transaction_splits ts
                             JOIN stock.stock_transactions t ON ts.original_transaction_id = t.id
                             WHERE t.user_id = %s 
-                              AND ts.stock_code = %s 
-                              AND ts.market = %s
+                              AND ts.stock_code COLLATE utf8mb4_unicode_ci = %s COLLATE utf8mb4_unicode_ci 
+                              AND ts.market COLLATE utf8mb4_unicode_ci = %s COLLATE utf8mb4_unicode_ci
                         """
                         
                         realized_params = [user_id, stock['code'], stock['market']]
