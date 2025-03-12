@@ -930,6 +930,16 @@ class TransactionCalculator:
             logger.info(f"交易数据: {transaction_data}")
             logger.info(f"持仓变化: {position_change}")
             
+            # 检查必要的字段是否存在
+            required_fields = ['transaction_date', 'stock_code', 'market', 'transaction_type', 'total_quantity', 'total_amount']
+            for field in required_fields:
+                if field not in transaction_data:
+                    logger.error(f"编辑交易记录失败: 缺少必要字段 {field}")
+                    return False, {'message': f'编辑交易记录失败: 缺少必要字段 {field}'}
+            
+            # 记录交易日期格式
+            logger.info(f"交易日期: {transaction_data['transaction_date']}, 类型: {type(transaction_data['transaction_date'])}")
+            
             update_sql = """
                 UPDATE stock_transactions
                 SET transaction_date = %s,
@@ -972,8 +982,25 @@ class TransactionCalculator:
             logger.info(f"SQL参数: {params}")
             
             try:
-                success = db_conn.execute(update_sql, params)
-                logger.info(f"更新交易记录结果: {success}")
+                # 检查数据库连接对象类型
+                logger.info(f"数据库连接对象类型: {type(db_conn)}")
+                
+                # 尝试获取数据库连接方法
+                if hasattr(db_conn, 'execute'):
+                    logger.info("使用 db_conn.execute 方法执行 SQL")
+                    success = db_conn.execute(update_sql, params)
+                    logger.info(f"更新交易记录结果: {success}")
+                elif hasattr(db_conn, 'get_connection'):
+                    logger.info("使用 db_conn.get_connection 方法获取连接")
+                    with db_conn.get_connection() as conn:
+                        with conn.cursor() as cursor:
+                            logger.info("使用 cursor.execute 方法执行 SQL")
+                            cursor.execute(update_sql, params)
+                            success = cursor.rowcount > 0
+                            logger.info(f"更新交易记录结果: 影响行数={cursor.rowcount}")
+                else:
+                    logger.error("数据库连接对象没有 execute 或 get_connection 方法")
+                    return False, {'message': '更新交易记录失败: 数据库连接对象不支持执行 SQL'}
                 
                 if not success:
                     logger.error("更新交易记录失败: 数据库操作未成功执行")
@@ -982,36 +1009,248 @@ class TransactionCalculator:
                 logger.error(f"执行SQL更新时出错: {str(sql_e)}", exc_info=True)
                 return False, {'message': f'执行SQL更新时出错: {str(sql_e)}'}
             
+            # 处理交易明细
+            if 'details' in transaction_data and transaction_data['details']:
+                try:
+                    logger.info(f"开始处理交易明细: {transaction_data['details']}")
+                    
+                    # 删除旧的交易明细
+                    delete_details_sql = "DELETE FROM stock_transaction_details WHERE transaction_id = %s"
+                    logger.info(f"执行删除明细SQL: {delete_details_sql}, 参数: [{transaction_id}]")
+                    
+                    try:
+                        if hasattr(db_conn, 'execute'):
+                            db_conn.execute(delete_details_sql, [transaction_id])
+                        elif hasattr(db_conn, 'get_connection'):
+                            with db_conn.get_connection() as conn:
+                                with conn.cursor() as cursor:
+                                    cursor.execute(delete_details_sql, [transaction_id])
+                        logger.info("删除旧的交易明细成功")
+                    except Exception as del_e:
+                        logger.error(f"删除旧的交易明细失败: {str(del_e)}", exc_info=True)
+                        return False, {'message': f'删除旧的交易明细失败: {str(del_e)}'}
+                    
+                    # 添加新的交易明细
+                    for i, detail in enumerate(transaction_data['details']):
+                        detail_sql = """
+                            INSERT INTO stock_transaction_details
+                            (transaction_id, quantity, price, created_at)
+                            VALUES (%s, %s, %s, NOW())
+                        """
+                        detail_params = [
+                            transaction_id,
+                            float(detail.get('quantity', 0)),
+                            float(detail.get('price', 0))
+                        ]
+                        
+                        logger.info(f"执行插入明细SQL: {detail_sql}, 参数: {detail_params}")
+                        
+                        try:
+                            if hasattr(db_conn, 'execute'):
+                                db_conn.execute(detail_sql, detail_params)
+                            elif hasattr(db_conn, 'get_connection'):
+                                with db_conn.get_connection() as conn:
+                                    with conn.cursor() as cursor:
+                                        cursor.execute(detail_sql, detail_params)
+                            logger.info(f"插入交易明细 #{i+1} 成功")
+                        except Exception as ins_e:
+                            logger.error(f"插入交易明细 #{i+1} 失败: {str(ins_e)}", exc_info=True)
+                            return False, {'message': f'插入交易明细失败: {str(ins_e)}'}
+                    
+                    logger.info("处理交易明细完成")
+                except Exception as detail_e:
+                    logger.error(f"处理交易明细时出错: {str(detail_e)}", exc_info=True)
+                    return False, {'message': f'处理交易明细时出错: {str(detail_e)}'}
+            
+            # 更新分单记录
+            try:
+                logger.info(f"开始更新分单记录: transaction_id={transaction_id}")
+                
+                # 检查是否有分单记录
+                check_splits_sql = """
+                    SELECT COUNT(*) as split_count FROM transaction_splits 
+                    WHERE original_transaction_id = %s
+                """
+                split_count = 0
+                
+                if hasattr(db_conn, 'fetch_one'):
+                    split_result = db_conn.fetch_one(check_splits_sql, [transaction_id])
+                    if split_result:
+                        split_count = split_result['split_count']
+                elif hasattr(db_conn, 'get_connection'):
+                    with db_conn.get_connection() as conn:
+                        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                            cursor.execute(check_splits_sql, [transaction_id])
+                            split_result = cursor.fetchone()
+                            if split_result:
+                                split_count = split_result['split_count']
+                
+                logger.info(f"找到 {split_count} 条分单记录")
+                
+                if split_count > 0:
+                    # 获取股票名称
+                    stock_name = ""
+                    stock_name_sql = """
+                        SELECT code_name FROM stocks 
+                        WHERE code = %s AND market = %s
+                        LIMIT 1
+                    """
+                    
+                    if hasattr(db_conn, 'fetch_one'):
+                        stock_result = db_conn.fetch_one(stock_name_sql, [transaction_data['stock_code'], transaction_data['market']])
+                        if stock_result:
+                            stock_name = stock_result['code_name']
+                    elif hasattr(db_conn, 'get_connection'):
+                        with db_conn.get_connection() as conn:
+                            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                                cursor.execute(stock_name_sql, [transaction_data['stock_code'], transaction_data['market']])
+                                stock_result = cursor.fetchone()
+                                if stock_result:
+                                    stock_name = stock_result['code_name']
+                    
+                    if not stock_name:
+                        stock_name = transaction_data['stock_code']
+                    
+                    logger.info(f"股票名称: {stock_name}")
+                    
+                    # 更新分单记录
+                    update_splits_sql = """
+                        UPDATE transaction_splits
+                        SET transaction_date = %s,
+                            stock_code = %s,
+                            stock_name = %s,
+                            market = %s,
+                            transaction_type = %s,
+                            total_amount = %s,
+                            total_quantity = %s,
+                            broker_fee = %s,
+                            stamp_duty = %s,
+                            transaction_levy = %s,
+                            trading_fee = %s,
+                            deposit_fee = %s,
+                            total_fees = %s,
+                            net_amount = %s,
+                            updated_at = NOW()
+                        WHERE original_transaction_id = %s
+                    """
+                    
+                    update_splits_params = [
+                        transaction_data['transaction_date'],
+                        transaction_data['stock_code'],
+                        stock_name,
+                        transaction_data['market'],
+                        transaction_data['transaction_type'],
+                        transaction_data['total_amount'],
+                        transaction_data['total_quantity'],
+                        transaction_data.get('broker_fee', 0),
+                        transaction_data.get('stamp_duty', 0),
+                        transaction_data.get('transaction_levy', 0),
+                        transaction_data.get('trading_fee', 0),
+                        transaction_data.get('deposit_fee', 0),
+                        position_change['total_fees'],
+                        position_change['net_amount'],
+                        transaction_id
+                    ]
+                    
+                    logger.info(f"执行更新分单记录SQL: {update_splits_sql}")
+                    logger.info(f"SQL参数: {update_splits_params}")
+                    
+                    if hasattr(db_conn, 'execute'):
+                        db_conn.execute(update_splits_sql, update_splits_params)
+                    elif hasattr(db_conn, 'get_connection'):
+                        with db_conn.get_connection() as conn:
+                            with conn.cursor() as cursor:
+                                cursor.execute(update_splits_sql, update_splits_params)
+                    
+                    logger.info("更新分单记录成功")
+                    
+                    # 更新交易记录的has_splits标志
+                    update_has_splits_sql = """
+                        UPDATE stock_transactions 
+                        SET has_splits = 1, updated_at = NOW()
+                        WHERE id = %s
+                    """
+                    
+                    if hasattr(db_conn, 'execute'):
+                        db_conn.execute(update_has_splits_sql, [transaction_id])
+                    elif hasattr(db_conn, 'get_connection'):
+                        with db_conn.get_connection() as conn:
+                            with conn.cursor() as cursor:
+                                cursor.execute(update_has_splits_sql, [transaction_id])
+                    
+                    logger.info("更新交易记录has_splits标志成功")
+                    
+                    # 重新计算所有分单记录
+                    try:
+                        from utils.transaction_recalculator import recalculate_transaction_splits
+                        recalculate_transaction_splits(
+                            stock_code=transaction_data['stock_code'],
+                            market=transaction_data['market'],
+                            transaction_id=transaction_id,
+                            update_original=True
+                        )
+                        logger.info("重新计算分单记录成功")
+                    except Exception as recalc_e:
+                        logger.error(f"重新计算分单记录失败: {str(recalc_e)}", exc_info=True)
+                        # 不影响主交易记录的更新，继续执行
+            except Exception as split_e:
+                logger.error(f"更新分单记录失败: {str(split_e)}", exc_info=True)
+                # 不影响主交易记录的更新，继续执行
+            
             # 重新计算后续交易记录
             logger.info(f"开始重新计算后续交易记录: 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
-            TransactionCalculator.recalculate_subsequent_transactions(
-                db_conn,
-                transaction_data['stock_code'],
-                transaction_data['market'],
-                transaction_data['transaction_date']
-            )
-            
-            # 获取交易记录的持有人信息
-            logger.info("查询交易记录的持有人信息")
-            split_query = """
-                SELECT holder_id FROM transaction_splits
-                WHERE original_transaction_id = %s
-                LIMIT 1
-            """
-            split_result = db_conn.fetch_one(split_query, [transaction_id])
-            if split_result and split_result['holder_id']:
-                holder_id = split_result['holder_id']
-                logger.info(f"找到交易记录的持有人: holder_id={holder_id}")
-                logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+            try:
                 TransactionCalculator.recalculate_subsequent_transactions(
                     db_conn,
                     transaction_data['stock_code'],
                     transaction_data['market'],
-                    transaction_data['transaction_date'],
-                    holder_id
+                    transaction_data['transaction_date']
                 )
-            else:
-                logger.warning(f"未找到交易记录的持有人信息: transaction_id={transaction_id}")
+                logger.info("重新计算后续交易记录成功")
+            except Exception as recalc_e:
+                logger.error(f"重新计算后续交易记录失败: {str(recalc_e)}", exc_info=True)
+                # 不影响主交易记录的更新，继续执行
+            
+            # 获取交易记录的持有人信息
+            logger.info("查询交易记录的持有人信息")
+            try:
+                split_query = """
+                    SELECT holder_id FROM transaction_splits
+                    WHERE original_transaction_id = %s
+                    LIMIT 1
+                """
+                logger.info(f"执行查询持有人SQL: {split_query}, 参数: [{transaction_id}]")
+                
+                split_result = None
+                if hasattr(db_conn, 'fetch_one'):
+                    split_result = db_conn.fetch_one(split_query, [transaction_id])
+                elif hasattr(db_conn, 'get_connection'):
+                    with db_conn.get_connection() as conn:
+                        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                            cursor.execute(split_query, [transaction_id])
+                            split_result = cursor.fetchone()
+                
+                if split_result and split_result['holder_id']:
+                    holder_id = split_result['holder_id']
+                    logger.info(f"找到交易记录的持有人: holder_id={holder_id}")
+                    logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
+                    try:
+                        TransactionCalculator.recalculate_subsequent_transactions(
+                            db_conn,
+                            transaction_data['stock_code'],
+                            transaction_data['market'],
+                            transaction_data['transaction_date'],
+                            holder_id
+                        )
+                        logger.info("重新计算持有人后续交易记录成功")
+                    except Exception as holder_recalc_e:
+                        logger.error(f"重新计算持有人后续交易记录失败: {str(holder_recalc_e)}", exc_info=True)
+                        # 不影响主交易记录的更新，继续执行
+                else:
+                    logger.warning(f"未找到交易记录的持有人信息: transaction_id={transaction_id}")
+            except Exception as split_e:
+                logger.error(f"查询交易记录的持有人信息失败: {str(split_e)}", exc_info=True)
+                # 不影响主交易记录的更新，继续执行
             
             logger.info("编辑交易记录处理完成")
             return True, {'message': '更新交易记录成功', 'position_change': position_change}
