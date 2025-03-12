@@ -658,4 +658,4 @@ onMounted(() => {
 .text-primary {
   color: #007bff;
 }
-</style> </style>
+</style>
