@@ -95,12 +95,21 @@ def update_transaction(id):
         data = request.get_json()
         logger.info(f"更新交易记录: ID={id}, 数据={data}")
         
+        # 添加更详细的日志记录
+        logger.info(f"更新交易记录详细信息: 交易日期={data.get('transaction_date')}, 类型={data.get('transaction_type')}, 股票代码={data.get('stock_code')}")
+        logger.info(f"更新交易记录费用信息: 经纪佣金={data.get('broker_fee')}, 印花税={data.get('stamp_duty')}, 交易征费={data.get('transaction_levy')}")
+        logger.info(f"更新交易记录明细: {data.get('details')}")
+        
         # 使用交易服务处理编辑操作
+        logger.info(f"开始调用 TransactionService.process_transaction 处理更新")
         success, result, status_code = TransactionService.process_transaction(
             db, session['user_id'], data, id
         )
         
+        logger.info(f"TransactionService.process_transaction 处理结果: success={success}, result={result}, status_code={status_code}")
+        
         if success:
+            logger.info(f"更新交易记录成功: ID={id}")
             return jsonify({
                 'success': True,
                 'message': result['message'],
@@ -109,10 +118,11 @@ def update_transaction(id):
                 }
             })
         else:
+            logger.error(f"更新交易记录失败: {result}")
             return jsonify({'success': False, **result}), status_code
             
     except Exception as e:
-        logger.error(f'更新交易记录失败: {str(e)}')
+        logger.error(f"更新交易记录失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': str(e)

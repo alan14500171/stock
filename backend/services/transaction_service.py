@@ -27,7 +27,11 @@ class TransactionService:
         """
         try:
             # 开始事务
+            logger.info(f"开始处理交易记录: user_id={user_id}, transaction_id={transaction_id}, is_delete={is_delete}")
+            logger.info(f"交易数据: {transaction_data}")
+            
             db.execute("START TRANSACTION")
+            logger.info("数据库事务已开始")
             
             try:
                 # 获取用户的默认持有人ID
@@ -65,6 +69,12 @@ class TransactionService:
                         return False, {'message': '创建默认持有人失败'}, 500
                 
                 # 使用统一计算模块处理交易
+                logger.info(f"准备调用 TransactionCalculator.process_transaction: holder_id={holder_id}, operation_type={'delete' if is_delete else 'edit' if transaction_id else 'add'}")
+                
+                # 记录交易日期格式
+                if 'transaction_date' in transaction_data:
+                    logger.info(f"交易日期格式: {transaction_data['transaction_date']}, 类型: {type(transaction_data['transaction_date'])}")
+                
                 success, result = TransactionCalculator.process_transaction(
                     db_conn=db,
                     transaction_data=transaction_data,
@@ -73,15 +83,20 @@ class TransactionService:
                     original_transaction_id=transaction_id
                 )
                 
+                logger.info(f"TransactionCalculator.process_transaction 处理结果: success={success}, result={result}")
+                
                 if not success:
+                    logger.error(f"处理交易记录失败，回滚事务: {result}")
                     db.execute("ROLLBACK")
                     return False, result, 400
                 
                 # 提交事务
+                logger.info("处理交易记录成功，提交事务")
                 db.execute("COMMIT")
                 
                 # 重新计算后续交易记录
                 try:
+                    logger.info(f"开始重新计算后续交易记录: stock_code={transaction_data['stock_code']}, market={transaction_data['market']}, date={transaction_data['transaction_date']}")
                     TransactionCalculator.recalculate_subsequent_transactions(
                         db_conn=db,
                         stock_code=transaction_data['stock_code'],
@@ -89,17 +104,20 @@ class TransactionService:
                         start_date=transaction_data['transaction_date'],
                         holder_id=holder_id  # 使用获取到的持有人ID，而不是用户ID
                     )
+                    logger.info("重新计算后续交易记录完成")
                 except Exception as e:
-                    logger.error(f"重新计算后续交易记录失败: {str(e)}")
+                    logger.error(f"重新计算后续交易记录失败: {str(e)}", exc_info=True)
                 
+                logger.info(f"交易处理完成: success=True, result={result}")
                 return True, result, 200
                 
             except Exception as e:
+                logger.error(f"处理交易记录内部异常，回滚事务: {str(e)}", exc_info=True)
                 db.execute("ROLLBACK")
                 raise e
                 
         except Exception as e:
-            logger.error(f"处理交易记录失败: {str(e)}")
+            logger.error(f"处理交易记录失败: {str(e)}", exc_info=True)
             return False, {'message': f'处理交易记录失败: {str(e)}'}, 500
     
     @staticmethod

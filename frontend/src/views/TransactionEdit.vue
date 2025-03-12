@@ -258,9 +258,23 @@ const loadTransaction = async () => {
       throw new Error('交易记录不存在')
     }
 
+    // 格式化日期为YYYY-MM-DD
+    let formattedDate = transaction.transaction_date
+    if (transaction.transaction_date) {
+      try {
+        // 尝试将日期转换为YYYY-MM-DD格式
+        const date = new Date(transaction.transaction_date)
+        if (!isNaN(date.getTime())) {
+          formattedDate = date.toISOString().split('T')[0] // 格式化为YYYY-MM-DD
+        }
+      } catch (e) {
+        console.error('日期格式转换失败:', e)
+      }
+    }
+
     // 更新表单数据
     form.value = {
-      transaction_date: transaction.transaction_date,
+      transaction_date: formattedDate,
       stock_code: transaction.stock_code,
       stock_name: transaction.stock_name,
       transaction_code: transaction.transaction_code,
@@ -270,7 +284,7 @@ const loadTransaction = async () => {
         : [{ quantity: transaction.total_quantity, price: transaction.total_amount / transaction.total_quantity }],
       broker_fee: transaction.broker_fee || 0,
       transaction_levy: transaction.transaction_levy || 0,
-      stamp_duty: transaction.transaction_type.toLowerCase() === 'buy' ? 0 : (transaction.stamp_duty || 0),
+      stamp_duty: transaction.stamp_duty || 0,
       trading_fee: transaction.trading_fee || 0,
       deposit_fee: transaction.deposit_fee || 0,
       market: transaction.market,
@@ -284,7 +298,9 @@ const loadTransaction = async () => {
     
     console.log('加载的交易数据:', {
       交易类型: form.value.transaction_type,
-      印花税: form.value.stamp_duty
+      印花税: form.value.stamp_duty,
+      原始日期: transaction.transaction_date,
+      格式化后日期: formattedDate
     })
   } catch (error) {
     showToast(error.message || '加载交易记录失败，请稍后重试', 'danger')
@@ -331,14 +347,31 @@ const submitForm = async () => {
       return sum + (quantity * price)
     }, 0)
     
+    // 确保日期格式正确
+    let formattedDate = form.value.transaction_date
+    if (form.value.transaction_date) {
+      try {
+        // 如果日期不是YYYY-MM-DD格式，尝试转换
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(form.value.transaction_date)) {
+          const date = new Date(form.value.transaction_date)
+          if (!isNaN(date.getTime())) {
+            formattedDate = date.toISOString().split('T')[0] // 格式化为YYYY-MM-DD
+          }
+        }
+      } catch (e) {
+        console.error('提交日期格式转换失败:', e)
+      }
+    }
+    
     console.log('提交交易数据:', {
       总数量: totalQuantity,
       总金额: totalAmount,
-      明细: form.value.details
+      明细: form.value.details,
+      日期: formattedDate
     })
     
     const submitData = {
-      transaction_date: form.value.transaction_date,
+      transaction_date: formattedDate,
       stock_code: form.value.stock_code,
       transaction_code: form.value.transaction_code,
       transaction_type: form.value.transaction_type.toLowerCase(),
@@ -421,9 +454,7 @@ const showToast = (message, type = 'danger') => {
 
 // 监听交易类型变化
 watch(() => form.value.transaction_type, (newType) => {
-  if (newType === 'buy') {
-    form.value.stamp_duty = 0
-  }
+  // 移除自动设置印花税的逻辑，让用户自行编辑
 })
 
 // 组件挂载时加载数据

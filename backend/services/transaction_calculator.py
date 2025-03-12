@@ -4,6 +4,7 @@ import logging
 from typing import Dict, List, Tuple, Optional, Any
 from utils.db import get_db_connection
 import pymysql
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -925,6 +926,10 @@ class TransactionCalculator:
     ) -> Tuple[bool, Dict[str, Any]]:
         """处理编辑交易"""
         try:
+            logger.info(f"开始处理编辑交易: transaction_id={transaction_id}")
+            logger.info(f"交易数据: {transaction_data}")
+            logger.info(f"持仓变化: {position_change}")
+            
             update_sql = """
                 UPDATE stock_transactions
                 SET transaction_date = %s,
@@ -963,9 +968,19 @@ class TransactionCalculator:
                 transaction_id
             ]
             
-            success = db_conn.execute(update_sql, params)
-            if not success:
-                return False, {'message': '更新交易记录失败'}
+            logger.info(f"执行更新SQL: {update_sql}")
+            logger.info(f"SQL参数: {params}")
+            
+            try:
+                success = db_conn.execute(update_sql, params)
+                logger.info(f"更新交易记录结果: {success}")
+                
+                if not success:
+                    logger.error("更新交易记录失败: 数据库操作未成功执行")
+                    return False, {'message': '更新交易记录失败: 数据库操作未成功执行'}
+            except Exception as sql_e:
+                logger.error(f"执行SQL更新时出错: {str(sql_e)}", exc_info=True)
+                return False, {'message': f'执行SQL更新时出错: {str(sql_e)}'}
             
             # 重新计算后续交易记录
             logger.info(f"开始重新计算后续交易记录: 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
@@ -977,6 +992,7 @@ class TransactionCalculator:
             )
             
             # 获取交易记录的持有人信息
+            logger.info("查询交易记录的持有人信息")
             split_query = """
                 SELECT holder_id FROM transaction_splits
                 WHERE original_transaction_id = %s
@@ -985,6 +1001,7 @@ class TransactionCalculator:
             split_result = db_conn.fetch_one(split_query, [transaction_id])
             if split_result and split_result['holder_id']:
                 holder_id = split_result['holder_id']
+                logger.info(f"找到交易记录的持有人: holder_id={holder_id}")
                 logger.info(f"开始重新计算持有人后续交易记录: 持有人ID={holder_id}, 股票代码={transaction_data['stock_code']}, 市场={transaction_data['market']}, 日期={transaction_data['transaction_date']}")
                 TransactionCalculator.recalculate_subsequent_transactions(
                     db_conn,
@@ -993,11 +1010,14 @@ class TransactionCalculator:
                     transaction_data['transaction_date'],
                     holder_id
                 )
-                
-            return True, {'position_change': position_change}
+            else:
+                logger.warning(f"未找到交易记录的持有人信息: transaction_id={transaction_id}")
+            
+            logger.info("编辑交易记录处理完成")
+            return True, {'message': '更新交易记录成功', 'position_change': position_change}
             
         except Exception as e:
-            logger.error(f"编辑交易记录失败: {str(e)}")
+            logger.error(f"编辑交易记录失败: {str(e)}", exc_info=True)
             return False, {'message': f'编辑交易记录失败: {str(e)}'}
 
     @staticmethod
@@ -1702,18 +1722,28 @@ class TransactionCalculator:
                     parsed_date = None
                     
                     # 尝试标准格式 YYYY-MM-DD
-                    try:
-                        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
-                    except ValueError:
-                        pass
+                    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+                        try:
+                            parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                        except ValueError:
+                            pass
                     
                     # 尝试GMT格式 Thu, 27 Feb 2025 00:00:00 GMT
-                    if not parsed_date:
+                    if not parsed_date and re.match(r'^[A-Za-z]{3}, \d{1,2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$', date_str):
                         try:
-                            from email.utils import parsedate_to_datetime
-                            parsed_date = parsedate_to_datetime(date_str)
-                        except Exception:
-                            pass
+                            # 使用dateutil解析器，它更灵活
+                            from dateutil import parser
+                            parsed_date = parser.parse(date_str)
+                        except Exception as e:
+                            logger.error(f"解析GMT日期失败: {date_str}, 错误: {str(e)}")
+                            
+                            # 如果dateutil不可用，尝试手动解析
+                            try:
+                                # 提取日期部分: "Thu, 27 Feb 2025 00:00:00 GMT" -> "27 Feb 2025"
+                                date_part = re.search(r'\d{1,2} [A-Za-z]{3} \d{4}', date_str).group(0)
+                                parsed_date = datetime.strptime(date_part, '%d %b %Y')
+                            except Exception as e2:
+                                logger.error(f"手动解析GMT日期失败: {date_str}, 错误: {str(e2)}")
                     
                     # 尝试其他常见格式
                     formats = [
@@ -1734,6 +1764,21 @@ class TransactionCalculator:
                                 parsed_date = datetime.strptime(date_str, fmt)
                             except ValueError:
                                 continue
+                    
+                    # 最后尝试使用Python的日期解析能力
+                    if not parsed_date:
+                        try:
+                            parsed_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        except (ValueError, AttributeError):
+                            pass
+                    
+                    # 如果所有方法都失败，尝试使用通用解析
+                    if not parsed_date:
+                        try:
+                            from dateutil import parser
+                            parsed_date = parser.parse(date_str)
+                        except (ImportError, Exception) as e:
+                            logger.error(f"通用日期解析失败: {date_str}, 错误: {str(e)}")
                     
                     if not parsed_date:
                         errors.append('交易日期格式错误，无法解析')
