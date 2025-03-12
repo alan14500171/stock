@@ -338,6 +338,24 @@ class TransactionCalculator:
                 logger.error(f"无效的交易数量: {total_quantity}")
                 return False, {"message": f"无效的交易数量: {total_quantity}"}
             
+            # 检查是否已存在相同的交易记录
+            check_duplicate_sql = """
+                SELECT id FROM stock_transactions
+                WHERE transaction_code = %s
+                LIMIT 1
+            """
+            
+            check_params = [
+                transaction_data.get('transaction_code', '')
+            ]
+            
+            # 只有当交易编号不为空时才检查重复
+            if transaction_data.get('transaction_code', ''):
+                existing_transaction = db_conn.fetch_one(check_duplicate_sql, check_params)
+                if existing_transaction:
+                    logger.warning(f"已存在相同的交易编号: ID={existing_transaction['id']}, 交易编号={transaction_data.get('transaction_code', '')}")
+                    return False, {"message": f"已存在相同的交易编号，请勿重复添加", "id": existing_transaction['id']}
+            
             # 计算交易费用
             broker_fee = float(transaction_data.get('broker_fee', 0) or 0)
             stamp_duty = float(transaction_data.get('stamp_duty', 0) or 0)
