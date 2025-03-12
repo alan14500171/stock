@@ -139,8 +139,7 @@
       <stock-add-dialog
         v-model="showDialog"
         :edit-data="editData"
-        @submit="handleDialogSubmit"
-        @close="handleDialogClose"
+        @success="handleSuccess"
       />
 
       <!-- 删除确认对话框 -->
@@ -346,16 +345,6 @@ onMounted(() => {
 // 添加股票管理相关的权限控制
 const toggleSearch = () => {
   searchVisible.value = !searchVisible.value
-}
-
-const handleDialogSubmit = () => {
-  // 处理添加/编辑成功后的逻辑
-  fetchStocks()
-}
-
-const handleDialogClose = () => {
-  // 处理关闭对话框后的逻辑
-  fetchStocks()
 }
 
 const deleteStock = () => {
