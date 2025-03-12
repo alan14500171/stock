@@ -231,13 +231,15 @@
                     </tr>
                     <!-- 交易明细行 -->
                     <tr v-if="isStockExpanded(market, stock.code)">
-                      <td colspan="13" class="p-0">
+                      <td colspan="11" class="p-0">
                         <div class="transaction-details">
                           <table class="table table-sm mb-0">
                             <thead class="table-light">
                               <tr>
                                 <th class="transaction-info">交易日期</th>
+                                <th class="text-end cost">交易前数量</th>
                                 <th class="quantity-price">数量@单价</th>
+                                <th class="text-end cost">交易后数量</th>
                                 <th class="text-end amount">买入金额</th>
                                 <th class="text-end cost" title="移动加权平均价">平均价格</th>
                                 <th class="text-end amount">卖出金额</th>
@@ -245,8 +247,6 @@
                                 <th class="text-end profit">盈亏</th>
                                 <th class="text-end current-price">盈亏率</th>
                                 <th class="text-end holding-value">持有人</th>
-                                <th class="text-end total-profit"></th>
-                                <th class="text-end profit-rate"></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -259,9 +259,15 @@
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code ? detail.transaction_code.trim() : '-' }}</span>
                                   </td>
+                                  <td class="text-end cost">
+                                    {{ formatNumber(detail.prev_quantity, 0) }}
+                                  </td>
                                   <td class="quantity-price">
                                     {{ formatNumber(detail.total_quantity, 0) }} @ 
                                     {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
+                                  </td>
+                                  <td class="text-end cost">
+                                    {{ formatNumber(detail.current_quantity, 0) }}
                                   </td>
                                   <td class="text-end amount">
                                     {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
@@ -287,8 +293,6 @@
                                     {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
                                   </td>
                                   <td class="text-end">{{ detail.holder_name || '-' }}</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
                                 </tr>
                               </template>
                               <tr v-else>
@@ -348,13 +352,15 @@
                     </tr>
                     <!-- 交易明细行 -->
                     <tr v-if="isStockExpanded(market, stock.code)">
-                      <td colspan="13" class="p-0">
+                      <td colspan="11" class="p-0">
                         <div class="transaction-details">
                           <table class="table table-sm mb-0">
                             <thead class="table-light">
                               <tr>
                                 <th class="transaction-info">交易日期</th>
+                                <th class="text-end cost">交易前数量</th>
                                 <th class="quantity-price">数量@单价</th>
+                                <th class="text-end cost">交易后数量</th>
                                 <th class="text-end amount">买入金额</th>
                                 <th class="text-end cost" title="移动加权平均价">平均价格</th>
                                 <th class="text-end amount">卖出金额</th>
@@ -362,8 +368,6 @@
                                 <th class="text-end profit">盈亏</th>
                                 <th class="text-end current-price">盈亏率</th>
                                 <th class="text-end holding-value">持有人</th>
-                                <th class="text-end total-profit"></th>
-                                <th class="text-end profit-rate"></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -376,9 +380,15 @@
                                     </span>
                                     <span class="transaction-code">{{ detail.transaction_code ? detail.transaction_code.trim() : '-' }}</span>
                                   </td>
+                                  <td class="text-end cost">
+                                    {{ formatNumber(detail.prev_quantity, 0) }}
+                                  </td>
                                   <td class="quantity-price">
                                     {{ formatNumber(detail.total_quantity, 0) }} @ 
                                     {{ formatNumber(detail.total_amount / detail.total_quantity, 3) }}
+                                  </td>
+                                  <td class="text-end cost">
+                                    {{ formatNumber(detail.current_quantity, 0) }}
                                   </td>
                                   <td class="text-end amount">
                                     {{ detail.transaction_type.toLowerCase() === 'buy' ? formatNumber(detail.total_amount) : '' }}
@@ -404,8 +414,6 @@
                                     {{ detail.transaction_type.toLowerCase() === 'sell' ? formatRate(calculateProfitRate(detail)) : '-' }}
                                   </td>
                                   <td class="text-end">{{ detail.holder_name || '-' }}</td>
-                                  <td class="text-end">-</td>
-                                  <td class="text-end">-</td>
                                 </tr>
                               </template>
                               <tr v-else>
@@ -1314,6 +1322,14 @@ onMounted(() => {
   font-size: 12px;
 }
 
+/* 确保交易前数量、交易后数量和平均价格的列宽一致 */
+.transaction-details th.cost,
+.transaction-details td.cost {
+  min-width: 80px;
+  width: 80px;
+  font-size: 12px;
+}
+
 .transaction-details .fees {
   min-width: 80px;
   font-size: 12px;
@@ -1342,6 +1358,142 @@ onMounted(() => {
 .transaction-details .profit-rate {
   min-width: 100px;
   font-size: 12px;
+}
+
+/* 交易类型徽章样式 */
+.transaction-type-badge {
+  display: inline-block;
+  width: 30px;
+  height: 16px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 4px;
+  font-size: 0.75rem;  /* 12px */
+  font-weight: 450;
+  margin: 0 6px;
+}
+
+.transaction-type-badge.buy {
+  background-color: #e6071d;
+  color: #ffffff;
+}
+
+.transaction-type-badge.sell {
+  background-color: #549359;
+  color: #ffffff;
+}
+
+/* 交易编号样式 */
+.transaction-code {
+  font-size: 0.675rem;  /* 14px */
+  color: #6c757d;
+  margin-left: 4px;
+}
+
+/* 交易信息列样式 */
+.transaction-info {
+  min-width: 180px;
+  font-size: 0.75rem;  /* 12px */
+}
+
+/* 数量@单价列样式 */
+.quantity-price {
+  min-width: 60px;
+  padding-left: 1rem !important;
+  text-align: left !important;
+  font-size: 12px;
+}
+
+/* 金额列样式 */
+.amount {
+  min-width: 100px;
+  font-size: 12px;
+}
+
+/* 单笔成本列样式 */
+.cost {
+  min-width: 80px;
+  font-size: 12px;
+}
+
+/* 费用列样式 */
+.fees {
+  min-width: 80px;
+  font-size: 12px;
+}
+
+.profit {
+  min-width: 80px;
+  font-size: 12px;
+} 
+
+.current-price {
+  min-width: 100px;
+  font-size: 12px;
+} 
+
+.holding-value {
+  min-width: 100px;
+  font-size: 12px;
+} 
+
+.total-profit {
+  min-width: 100px;
+  font-size: 12px;
+}  
+
+.profit-rate {
+  min-width: 100px;
+  font-size: 12px;
+}
+
+/* 统计行样式 */
+.holding-stats-row,
+.closed-stats-row {
+  background-color: #f8f9fa;
+  font-size: 0.875rem;
+}
+
+.holding-stats-row td,
+.closed-stats-row td {
+  padding-left: 2rem !important;
+  color: #495057;
+}
+
+.holding-stats-row strong,
+.closed-stats-row strong {
+  color: #495057;
+  font-weight: 500;
+}
+
+.stock-selector-sm :deep(.selected-items) {
+  min-height: calc(1.5em + 0.5rem + 2px);
+  max-height: calc(2.5em + 0.5rem + 2px);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.stock-selector-sm :deep(.selected-tag) {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  max-width: 150px;
+}
+
+.stock-selector-sm :deep(.search-input) {
+  height: 1.25rem;
+  min-width: 40px;
+  font-size: 0.875rem;
+}
+
+.stock-selector-sm :deep(.dropdown-menu) {
+  min-width: 200px;
+}
+
+.company-name {
+  display: block;
+  font-size: 14px;
+  color: #64a7e3;
+  margin-top: 2px;
 }
 
 /* 交易类型标签样式 */
@@ -1556,141 +1708,5 @@ onMounted(() => {
 
 .small {
   font-size: 0.875rem;
-}
-
-/* 交易类型徽章样式 */
-.transaction-type-badge {
-  display: inline-block;
-  width: 30px;
-  height: 16px;
-  line-height: 15px;
-  text-align: center;
-  border-radius: 4px;
-  font-size: 0.75rem;  /* 12px */
-  font-weight: 450;
-  margin: 0 6px;
-}
-
-.transaction-type-badge.buy {
-  background-color: #e6071d;
-  color: #ffffff;
-}
-
-.transaction-type-badge.sell {
-  background-color: #549359;
-  color: #ffffff;
-}
-
-/* 交易编号样式 */
-.transaction-code {
-  font-size: 0.675rem;  /* 14px */
-  color: #6c757d;
-  margin-left: 4px;
-}
-
-/* 交易信息列样式 */
-.transaction-info {
-  min-width: 180px;
-  font-size: 0.75rem;  /* 12px */
-}
-
-/* 数量@单价列样式 */
-.quantity-price {
-  min-width: 60px;
-  padding-left: 1rem !important;
-  text-align: left !important;
-  font-size: 12px;
-}
-
-/* 金额列样式 */
-.amount {
-  min-width: 100px;
-  font-size: 12px;
-}
-
-/* 单笔成本列样式 */
-.cost {
-  min-width: 80px;
-  font-size: 12px;
-}
-
-/* 费用列样式 */
-.fees {
-  min-width: 80px;
-  font-size: 12px;
-}
-
-.profit {
-  min-width: 80px;
-  font-size: 12px;
-} 
-
-.current-price {
-  min-width: 100px;
-  font-size: 12px;
-} 
-
-.holding-value {
-  min-width: 100px;
-  font-size: 12px;
-} 
-
-.total-profit {
-  min-width: 100px;
-  font-size: 12px;
-}  
-
-.profit-rate {
-  min-width: 100px;
-  font-size: 12px;
-}
-
-/* 统计行样式 */
-.holding-stats-row,
-.closed-stats-row {
-  background-color: #f8f9fa;
-  font-size: 0.875rem;
-}
-
-.holding-stats-row td,
-.closed-stats-row td {
-  padding-left: 2rem !important;
-  color: #495057;
-}
-
-.holding-stats-row strong,
-.closed-stats-row strong {
-  color: #495057;
-  font-weight: 500;
-}
-
-.stock-selector-sm :deep(.selected-items) {
-  min-height: calc(1.5em + 0.5rem + 2px);
-  max-height: calc(2.5em + 0.5rem + 2px);
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-}
-
-.stock-selector-sm :deep(.selected-tag) {
-  font-size: 0.75rem;
-  padding: 0.125rem 0.375rem;
-  max-width: 150px;
-}
-
-.stock-selector-sm :deep(.search-input) {
-  height: 1.25rem;
-  min-width: 40px;
-  font-size: 0.875rem;
-}
-
-.stock-selector-sm :deep(.dropdown-menu) {
-  min-width: 200px;
-}
-
-.company-name {
-  display: block;
-  font-size: 14px;
-  color: #64a7e3;
-  margin-top: 2px;
 }
 </style> 
