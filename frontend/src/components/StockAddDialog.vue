@@ -104,9 +104,20 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useMessage } from '../composables/useMessage'
+
+// 添加防抖函数
+const debounce = (fn, delay) => {
+  let timer = null
+  return function(...args) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+    }, delay)
+  }
+}
 
 const props = defineProps({
   modelValue: Boolean,
@@ -123,6 +134,7 @@ const submitting = ref(false)
 const errors = ref({})
 const alertMessage = ref('')
 const stockSelected = ref(false)
+const isProcessing = ref(false) // 添加处理状态标志
 
 // 表单数据
 const form = ref({
@@ -161,16 +173,17 @@ const displayPrice = computed(() => {
 // 处理股票代码回车和Tab事件
 const handleCodeEnter = async (event) => {
   event.preventDefault()
-  if (!form.value.code) {
+  if (!form.value.code || isProcessing.value) {
     return
   }
   
+  isProcessing.value = true // 设置处理中状态
   errors.value = {}
   alertMessage.value = ''
   
   try {
     // 查询股票信息
-    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(form.value.code)}`)
+    const response = await axios.get(`/api/stock/search_stock?code=${encodeURIComponent(form.value.code)}&_t=${Date.now()}`)
     
     if (response.data.success && response.data.data.length > 0) {
       const stockData = response.data.data[0]
@@ -179,7 +192,8 @@ const handleCodeEnter = async (event) => {
       // 检查股票是否已存在
       const checkResponse = await axios.get('/api/stock/stocks', {
         params: {
-          search: form.value.code
+          search: form.value.code,
+          _t: Date.now() // 添加时间戳防止缓存
         }
       })
       
@@ -210,10 +224,16 @@ const handleCodeEnter = async (event) => {
       resetFormExceptCode()
     }
   } catch (error) {
+    console.error('查询股票信息失败:', error)
     alertMessage.value = '查询失败，请检查股票代码是否正确'
     resetFormExceptCode()
+  } finally {
+    isProcessing.value = false // 重置处理状态
   }
 }
+
+// 使用防抖处理股票代码输入
+const debouncedHandleCodeEnter = debounce(handleCodeEnter, 300)
 
 // 监听股票代码变化
 watch(() => form.value.code, (newCode) => {
@@ -292,7 +312,7 @@ watch(() => props.editData, (newData) => {
 
 // 修改提交表单方法
 const handleSubmit = async () => {
-  if (!validateForm() || submitting.value) return
+  if (!validateForm() || submitting.value || isProcessing.value) return
   
   try {
     submitting.value = true
@@ -319,7 +339,12 @@ const handleSubmit = async () => {
     const url = props.editData ? `/api/stock/stocks/${props.editData.id}` : '/api/stock/stocks'
     const method = props.editData ? 'put' : 'post'
     
-    const response = await axios[method](url, stock)
+    const response = await axios[method](url, stock, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
     
     if (response.data.success) {
       message.success(props.editData ? '股票更新成功' : '股票添加成功')
@@ -336,6 +361,17 @@ const handleSubmit = async () => {
     submitting.value = false
   }
 }
+
+// 在组件挂载时添加事件监听
+onMounted(() => {
+  // 添加全局点击事件监听，防止事件冒泡问题
+  document.addEventListener('click', (event) => {
+    // 如果点击的是对话框内的元素，不做处理
+    if (event.target.closest('.modal-content')) {
+      return
+    }
+  })
+})
 </script>
 
 <style scoped>

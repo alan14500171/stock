@@ -13,15 +13,21 @@ services:
       - "9099:9099"
     volumes:
       - .:/app
+      - ../logs:/app/logs
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Shanghai
+      - DB_HOST=stock-db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=stock
+      - DB_CHARSET=utf8mb4
       - DB_CONNECT_RETRY=5
-      - DB_CONNECT_TIMEOUT=10
       - DB_CONNECT_RETRY_DELAY=3
     networks:
-      - stock-network
+      - stock_backend_network
     # 添加健康检查
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9099/api/health"]
@@ -38,7 +44,7 @@ services:
         max-file: "3"
 
 networks:
-  stock-network:
+  stock_backend_network:
     driver: bridge
 
 # 不再需要volumes和networks配置 

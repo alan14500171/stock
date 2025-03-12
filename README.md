@@ -124,55 +124,51 @@ npm run dev
 
 ## 部署说明
 
-### 配置文件设置
-
-在部署前，您需要创建以下配置文件：
-
-1. 从示例文件创建数据库配置：
-```bash
-cp backend/config/db_config.example.py backend/config/db_config.py
-```
-
-2. 从示例文件创建环境变量配置：
-```bash
-cp .env.example .env
-```
-
-3. 从示例文件创建Docker Compose配置：
-```bash
-cp docker-compose.yml.example docker-compose.yml
-```
-
-4. 根据您的环境修改这些配置文件中的敏感信息，如数据库密码等。
-
-> **注意**：为了安全起见，这些包含敏感信息的配置文件不应该提交到Git仓库中。
+本项目提供了三个部署脚本，可以根据需要选择使用：
 
 ### 整体部署
 
-使用以下命令一键部署整个应用：
+使用主部署脚本一键部署整个系统（数据库、后端和前端）：
 
 ```bash
-docker-compose up -d --build
+bash deploy.sh
 ```
+
+这个脚本会依次执行以下操作：
+1. 创建必要的Docker网络
+2. 部署MySQL数据库
+3. 部署后端服务
+4. 部署前端服务
+5. 显示所有容器状态
 
 ### 单独部署后端
 
+如果只需要部署后端服务，可以使用：
+
 ```bash
 cd backend
-docker-compose -f docker/docker-compose.yml up -d --build
+bash deploy.sh
 ```
+
+后端服务将在端口9099上运行，API地址为：http://localhost:9099
 
 ### 单独部署前端
 
+如果只需要部署前端服务，可以使用：
+
 ```bash
 cd frontend
-docker-compose -f docker/docker-compose.yml up -d --build
+bash deploy.sh
 ```
 
-### 访问应用
+前端服务将在端口9009上运行，访问地址为：http://localhost:9009
 
-- 前端: http://localhost:9009
-- 后端API: http://localhost:9099
+### 注意事项
+
+1. 所有服务都使用同一个Docker网络`stock_backend_network`进行通信
+2. 后端服务依赖于数据库服务，请确保数据库服务正常运行
+3. 前端服务依赖于后端服务，请确保后端服务正常运行
+4. 如果遇到网络问题，可以尝试重新创建Docker网络
 
 ## 清理冗余文件
 
