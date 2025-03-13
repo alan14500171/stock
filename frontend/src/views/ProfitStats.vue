@@ -58,14 +58,30 @@
             style="width: 100px;"
             v-model="searchForm.market"
             ref="market"
-            @keydown.enter.prevent="focusNext($event, 'search')"
-            @keydown.tab="focusNext($event, 'search')"
+            @keydown.enter.prevent="focusNext($event, 'holder')"
+            @keydown.tab="focusNext($event, 'holder')"
           >
             <option value="">全部</option>
             <option value="HK">HK</option>
             <option value="USA">USA</option>
           </select>
               </div>
+        <div class="col-auto">
+          <label class="form-label small">持有人</label>
+          <select 
+            class="form-select form-select-sm"
+            style="width: 150px;"
+            v-model="searchForm.holderId"
+            ref="holder"
+            @keydown.enter.prevent="focusNext($event, 'stockCodes')"
+            @keydown.tab="focusNext($event, 'stockCodes')"
+          >
+            <option value="">全部持有人</option>
+            <option v-for="holder in holders" :key="holder.id" :value="holder.id">
+              {{ holder.display_name }}
+            </option>
+          </select>
+        </div>
         <div class="col-auto" style="min-width: 200px; max-width: 300px;">
           <label class="form-label small">股票代码</label>
           <stock-selector
@@ -73,6 +89,8 @@
             :stocks="allStocks"
             :market="searchForm.market"
             class="stock-selector-sm"
+            ref="stockCodes"
+            @keydown.enter.prevent="focusNext($event, 'search')"
           />
             </div>
         <div class="col-auto flex-grow-1" style="max-width: 50px;"></div>
@@ -460,18 +478,21 @@ const rawMarketStats = ref({})
 const stockStats = ref({})
 const transactionDetails = ref({})
 const allStocks = ref([])
+const holders = ref([])
 
 // 搜索表单
 const searchForm = reactive({
   startDate: '',
   endDate: '',
   market: '',
-  stockCodes: []
+  stockCodes: [],
+  holderId: ''
 })
 
 const startDate = ref(null)
 const endDate = ref(null)
 const market = ref(null)
+const holder = ref(null)
 
 const focusNext = (event, target) => {
   event.preventDefault()
@@ -484,6 +505,9 @@ const focusNext = (event, target) => {
       break
     case 'search':
       search()
+      break
+    case 'holder':
+      holder.value?.focus()
       break
   }
 }
@@ -813,6 +837,7 @@ const search = async () => {
     if (searchForm.endDate) params.end_date = searchForm.endDate
     if (searchForm.market) params.market = searchForm.market
     if (searchForm.stockCodes?.length > 0) params.stock_codes = searchForm.stockCodes
+    if (searchForm.holderId) params.holder_id = searchForm.holderId
     
     const response = await axios.get('/api/profit/', { params })
     
@@ -845,6 +870,7 @@ const resetSearch = () => {
   searchForm.endDate = ''
   searchForm.market = ''
   searchForm.stockCodes = []
+  searchForm.holderId = ''
   search()
 }
 
@@ -1202,9 +1228,39 @@ const sortTransactionDetails = (details) => {
   });
 }
 
+// 加载持有人列表
+const loadHolders = async () => {
+  try {
+    console.log('开始加载持有人列表...')
+    const response = await axios.get('/api/transaction/get_accessible_holders')
+    console.log('持有人列表API响应:', response.data)
+    
+    if (response.data.success) {
+      holders.value = response.data.data || []
+      console.log(`成功加载 ${holders.value.length} 个持有人:`, holders.value)
+      
+      // 检查持有人数据格式
+      if (holders.value.length > 0) {
+        console.log('持有人数据示例:', holders.value[0])
+      }
+    } else {
+      console.error('加载持有人列表失败:', response.data.message)
+      showToast('加载持有人列表失败: ' + response.data.message)
+    }
+  } catch (error) {
+    console.error('加载持有人列表失败:', error)
+    showToast('加载持有人列表失败，请稍后重试')
+    
+    // 尝试使用空数组初始化
+    holders.value = []
+  }
+}
+
 // 初始化
 onMounted(() => {
+  console.log('ProfitStats组件已挂载，开始初始化...')
   fetchStocks()
+  loadHolders()
   search()
 })
 </script>

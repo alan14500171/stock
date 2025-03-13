@@ -284,6 +284,8 @@ def get_profit_stats():
         end_date = request.args.get('end_date')
         market = request.args.get('market')
         holder_id = request.args.get('holder_id')
+        
+        logger.info(f"盈利统计查询参数: user_id={user_id}, start_date={start_date}, end_date={end_date}, market={market}, holder_id={holder_id}")
 
         # 获取用户关联的持有人ID
         holder_sql = "SELECT id FROM stock.holders WHERE user_id = %s"
@@ -318,6 +320,7 @@ def get_profit_stats():
         if holder_id:
             conditions.append('ts.holder_id = %s')
             params.append(holder_id)
+            logger.info(f"按持有人筛选: holder_id={holder_id}")
 
         where_clause = ' AND '.join(conditions)
 

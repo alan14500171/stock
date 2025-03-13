@@ -626,6 +626,63 @@ def get_all_transaction_splits():
             'message': f'获取所有分单记录异常: {str(e)}'
         }), 500
 
+@transaction_split_bp.route('/api/transaction/get_accessible_holders', methods=['GET'])
+@login_required
+def get_accessible_holders():
+    """
+    获取当前用户可以访问的持有人列表，用于盈利统计筛选
+    包括：
+    1. 用户自己创建的持有人
+    2. 用户通过分单关系可以访问的持有人
+    """
+    try:
+        current_user_id = session.get('user_id')
+        
+        # 记录请求信息
+        logger.info(f"获取可访问持有人列表，用户ID: {current_user_id}")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        
+        # 查询用户可访问的持有人列表
+        # 包括用户自己创建的持有人和通过分单关系可以访问的持有人
+        query = """
+        SELECT DISTINCT h.id, h.name, h.name as display_name, h.type
+        FROM holders h
+        WHERE h.status = 1 AND (
+            h.user_id = %s OR
+            h.id IN (
+                SELECT DISTINCT ts.holder_id
+                FROM transaction_splits ts
+                JOIN stock_transactions st ON ts.original_transaction_id = st.id
+                WHERE st.user_id = %s
+            )
+        )
+        ORDER BY h.name
+        """
+        cursor.execute(query, (current_user_id, current_user_id))
+        holders = cursor.fetchall()
+        
+        # 记录持有人信息
+        logger.info(f"获取到 {len(holders)} 个可访问的持有人")
+        
+        return jsonify({
+            'success': True,
+            'data': holders
+        })
+        
+    except Exception as e:
+        logger.error(f"获取可访问持有人列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取可访问持有人列表失败: {str(e)}'
+        }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # 添加辅助方法处理split_ratio格式
 def _format_split_ratio(value):
     """
