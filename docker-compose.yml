@@ -42,11 +42,10 @@ services:
         max-file: "3"
 
   # 前端服务
-  stock-frontend:
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: stock-frontend:latest
     container_name: stock-frontend
     restart: unless-stopped
     ports:
