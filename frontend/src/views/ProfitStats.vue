@@ -65,7 +65,7 @@
             <option value="HK">HK</option>
             <option value="USA">USA</option>
           </select>
-              </div>
+        </div>
         <div class="col-auto">
           <label class="form-label small">持有人</label>
           <select 
@@ -78,7 +78,7 @@
           >
             <option value="">全部持有人</option>
             <option v-for="holder in holders" :key="holder.id" :value="holder.id">
-              {{ holder.display_name }}
+              {{ holder.name }}
             </option>
           </select>
         </div>
