@@ -1681,7 +1681,7 @@ class TransactionCalculator:
                     prev_quantity, prev_cost, prev_avg_cost,
                     current_quantity, current_cost, current_avg_cost,
                     total_fees, net_amount, realized_profit,
-                    profit_rate, avg_price, running_quantity, running_cost, created_at
+                    profit_rate, avg_price, running_quantity, running_cost
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -1720,8 +1720,7 @@ class TransactionCalculator:
                 position_change.get('profit_rate', 0),  # profit_rate
                 float(position_change.get('avg_price', 0)),  # avg_price
                 running_quantity,  # running_quantity
-                running_cost,  # running_cost
-                current_time  # created_at
+                running_cost  # running_cost
             ]
             
             # 执行SQL插入

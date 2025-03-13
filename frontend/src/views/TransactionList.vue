@@ -852,9 +852,10 @@ const viewSplitDetails = (transaction) => {
 // 编辑分单
 const editSplit = (transaction) => {
   if (splitModal.value) {
-    splitModal.value.loadUsers()
-    splitModal.value.loadTransaction(transaction.transaction_code)
-    splitModal.value.showModal()
+    console.log('打开编辑分单模态框，交易数据:', transaction);
+    splitModal.value.showModal(transaction);
+  } else {
+    console.error('分单模态框引用不存在');
   }
 }
 
