@@ -19,8 +19,7 @@ services:
       - BACKEND_PORT=9099
       - NODE_ENV=production
     networks:
-      - frontend_network
-      - stock-backend_stock-network
+      - Stock
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
       interval: 30s
@@ -34,7 +33,5 @@ services:
         max-file: "3"
 
 networks:
-  frontend_network:
-    driver: bridge
-  stock-backend_stock-network:
+  Stock:
     external: true

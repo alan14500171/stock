@@ -1,91 +1,51 @@
 #!/bin/bash
+# 群辉NAS Docker部署脚本
 
-# 颜色定义
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+echo "开始部署股票管理系统..."
 
-echo -e "${BLUE}====================================${NC}"
-echo -e "${BLUE}     股票交易系统部署脚本启动中     ${NC}"
-echo -e "${BLUE}====================================${NC}"
+# 确保日志目录存在
+mkdir -p logs/frontend
 
-# 确保后端网络存在
-echo -e "${YELLOW}检查后端网络是否存在...${NC}"
-if ! docker network ls | grep -q stock_backend_network; then
-    echo -e "${YELLOW}创建后端网络 stock_backend_network...${NC}"
-    docker network create stock_backend_network
+# 检查Stock网络是否存在，如果不存在则创建
+if ! docker network ls | grep -q "Stock"; then
+  echo "创建Stock网络..."
+  docker network create Stock
+  if [ $? -ne 0 ]; then
+    echo "创建Stock网络失败，请检查Docker权限"
+    exit 1
+  fi
 fi
 
-# 部署数据库
-echo -e "${YELLOW}部署数据库服务...${NC}"
-cat > db-compose.yml << EOF
-version: '3.8'
+# 检查mysql-container是否存在并运行
+if ! docker ps | grep -q "mysql-container"; then
+  echo "警告: mysql-container未运行，请确保数据库容器已启动"
+  echo "系统将继续部署，但可能无法连接到数据库"
+fi
 
-services:
-  db:
-    image: mysql:8.0
-    container_name: stock-db
-    restart: unless-stopped
-    environment:
-      - MYSQL_ROOT_PASSWORD=rootpassword
-      - MYSQL_DATABASE=stock
-      - MYSQL_USER=stockuser
-      - MYSQL_PASSWORD=rootpassword
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./backend/mysql.cnf:/etc/mysql/conf.d/mysql.cnf
-    networks:
-      - stock_backend_network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-networks:
-  stock_backend_network:
-    external: true
-
-volumes:
-  mysql_data:
-    driver: local
-EOF
-
-# 停止并移除现有数据库容器
-echo -e "${YELLOW}停止并移除现有数据库容器...${NC}"
-docker-compose -f db-compose.yml down
-
-# 启动数据库容器
-echo -e "${YELLOW}启动数据库容器...${NC}"
-docker-compose -f db-compose.yml up -d
-
-# 等待数据库启动
-echo -e "${YELLOW}等待数据库启动...${NC}"
-sleep 10
-
-# 部署后端
-echo -e "${YELLOW}部署后端服务...${NC}"
+# 构建并启动后端服务
+echo "构建并启动后端服务..."
 cd backend
-bash deploy.sh
+docker-compose down
+docker-compose build
+docker-compose up -d
+if [ $? -ne 0 ]; then
+  echo "后端服务启动失败，请检查日志"
+  exit 1
+fi
 cd ..
 
-# 部署前端
-echo -e "${YELLOW}部署前端服务...${NC}"
+# 构建并启动前端服务
+echo "构建并启动前端服务..."
 cd frontend
-bash deploy.sh
+docker-compose down
+docker-compose build
+docker-compose up -d
+if [ $? -ne 0 ]; then
+  echo "前端服务启动失败，请检查日志"
+  exit 1
+fi
 cd ..
 
-# 检查所有容器状态
-echo -e "${YELLOW}检查所有容器状态...${NC}"
-docker ps --filter "network=stock_backend_network"
-
-echo -e "${GREEN}====================================${NC}"
-echo -e "${GREEN}     股票交易系统部署完成!     ${NC}"
-echo -e "${GREEN}====================================${NC}"
-echo -e "${GREEN}前端服务访问地址: http://localhost:9009${NC}"
-echo -e "${GREEN}后端API地址: http://localhost:9099${NC}"
-echo -e "${GREEN}====================================${NC}" 
+echo "部署完成！"
+echo "前端服务地址: http://$(hostname -I | awk '{print $1}'):9009"
+echo "后端服务地址: http://$(hostname -I | awk '{print $1}'):9099" 

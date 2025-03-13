@@ -18,16 +18,16 @@ services:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Shanghai
-      - DB_HOST=stock-db
+      - DB_HOST=mysql-container
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=rootpassword
+      - DB_PASSWORD=Zxc000123
       - DB_NAME=stock
       - DB_CHARSET=utf8mb4
       - DB_CONNECT_RETRY=5
       - DB_CONNECT_RETRY_DELAY=3
     networks:
-      - stock_backend_network
+      - Stock
     # 添加健康检查
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9099/api/health"]
@@ -44,7 +44,7 @@ services:
         max-file: "3"
 
 networks:
-  stock_backend_network:
-    driver: bridge
+  Stock:
+    external: true
 
 # 不再需要volumes和networks配置 

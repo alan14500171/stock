@@ -3,19 +3,17 @@
 
 echo "正在重启后端服务..."
 
-# 尝试使用docker compose命令
-if command -v docker compose &> /dev/null; then
-    echo "使用docker compose命令重启后端服务"
-    docker compose restart backend
-# 尝试使用docker-compose命令
-elif command -v docker-compose &> /dev/null; then
-    echo "使用docker-compose命令重启后端服务"
-    docker-compose restart backend
-# 尝试使用ssh连接到服务器重启服务
-else
-    echo "本地docker命令不可用，尝试使用ssh连接到服务器重启服务"
-    # 这里需要根据实际情况修改服务器地址和用户名
-    ssh user@server "cd /path/to/project && docker compose restart backend"
-fi
+# 进入后端目录
+cd backend
 
-echo "后端服务重启完成" 
+# 重启后端服务
+docker-compose restart stock-backend
+
+# 检查服务状态
+if [ $? -eq 0 ]; then
+  echo "后端服务重启成功！"
+  docker-compose ps
+else
+  echo "后端服务重启失败，请检查日志"
+  docker-compose logs
+fi 
