@@ -178,17 +178,6 @@ export const usePermissionStore = defineStore('permission', () => {
 
   // 检查是否有指定权限
   const hasPermission = (permission) => {
-    // 检查用户是否是管理员
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user.username === 'alan' || user.username === 'admin') {
-        console.log('管理员用户，自动通过权限检查:', permission)
-        return true
-      }
-    } catch (e) {
-      console.error('解析用户信息失败:', e)
-    }
-    
     // 如果没有传入权限标识，或者权限列表为空，则返回 false
     if (!permission || permissions.value.length === 0) {
       console.log('权限检查失败:', permission, '权限列表为空或未指定权限')
@@ -207,17 +196,6 @@ export const usePermissionStore = defineStore('permission', () => {
 
   // 检查是否有指定角色
   const hasRole = (role) => {
-    // 检查用户是否是管理员
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user.username === 'alan' || user.username === 'admin') {
-        console.log('管理员用户，自动通过角色检查:', role)
-        return true
-      }
-    } catch (e) {
-      console.error('解析用户信息失败:', e)
-    }
-    
     // 如果没有传入角色标识，或者角色列表为空，则返回 false
     if (!role || roles.value.length === 0) {
       console.log('角色检查失败:', role, '角色列表为空或未指定角色')

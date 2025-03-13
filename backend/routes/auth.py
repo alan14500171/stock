@@ -1,6 +1,8 @@
 from flask import Blueprint, request, session, jsonify
 from functools import wraps
 from models.user import User
+from models import Permission, Role
+from utils.auth import login_required, get_current_user
 import logging
 
 auth_bp = Blueprint('auth', __name__)
@@ -212,4 +214,44 @@ def change_password():
         return jsonify({
             'success': False,
             'message': f'修改密码失败: {str(e)}'
+        }), 500
+
+@auth_bp.route('/user/permissions', methods=['GET'])
+@login_required
+def get_user_permissions():
+    """获取当前用户的权限信息"""
+    try:
+        user = get_current_user()
+        logger.info(f"获取用户权限信息: {user.username if user else 'None'}")
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': '获取用户权限失败'
+            }), 401
+            
+        # 获取用户角色
+        roles = Role.get_user_roles(user.id)
+        logger.info(f"用户角色: {[role.name for role in roles]}")
+        
+        # 获取用户权限
+        permissions = Permission.get_user_permissions(user.id)
+        logger.info(f"用户权限数量: {len(permissions)}")
+        
+        # 只返回权限代码列表
+        permission_codes = [permission.code for permission in permissions]
+        logger.info(f"用户权限代码: {permission_codes}")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'permissions': permission_codes,
+                'roles': [role.to_dict() for role in roles]
+            }
+        })
+    except Exception as e:
+        logger.error(f"获取用户权限失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f"获取用户权限失败: {str(e)}"
         }), 500 
