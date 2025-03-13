@@ -639,12 +639,20 @@ def _format_split_ratio(value):
         # 记录原始值，方便调试
         logger.debug(f"处理分割比例: 原始值={float_value}")
         
-        # 如果值已经是百分比格式（大于等于1）就直接返回
-        if float_value >= 1:
+        # 如果值已经是百分比格式（0-100之间）就直接返回
+        if 0 <= float_value <= 100:
             return float_value
         # 如果值是小数格式（0-1之间）则转换为百分比
-        else:
+        elif 0 <= float_value < 1:
             return float_value * 100
+        # 如果值大于100，可能是错误的，返回100
+        elif float_value > 100:
+            logger.warning(f"分割比例值过大: {float_value}，将限制为100")
+            return 100
+        # 如果值为负，返回0
+        else:
+            logger.warning(f"分割比例值为负: {float_value}，将重置为0")
+            return 0
     except (ValueError, TypeError) as e:
         logger.error(f"分割比例格式化错误: {e}, 值={value}")
         return 0

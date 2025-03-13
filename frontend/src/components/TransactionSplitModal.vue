@@ -517,15 +517,13 @@ const loadTransaction = async (transactionCode = null) => {
           let ratio = historyItem.split_ratio;
           
           // 验证split_ratio
-          if (ratio > 10000) {
-            // 这可能是一个异常的比例值，假设它是百分比的100倍
-            console.warn(`检测到异常大的比例值: ${ratio}，可能是百分比的100倍，将除以100`);
-            ratio = ratio / 100;
+          if (typeof ratio === 'string') {
+            ratio = parseFloat(ratio);
           }
           
           // 确保值在合理范围内
           if (ratio > 100) {
-            console.warn(`比例值仍然超过100: ${ratio}，将重置为100`);
+            console.warn(`比例值超过100: ${ratio}，将重置为100`);
             ratio = 100;
           } else if (ratio < 0) {
             console.warn(`检测到负比例值: ${ratio}，将重置为0`);
@@ -789,6 +787,8 @@ const saveSplit = async () => {
           console.warn(`比例大于1: ${ratio}，将重置为1`);
           ratio = 1.0;
         }
+        
+        console.log(`提交分单项: 持有人=${item.holder_name}, 原始比例=${item.ratio}%, 转换后比例=${ratio}`);
         
         return {
           holder_id: item.holder_id,
